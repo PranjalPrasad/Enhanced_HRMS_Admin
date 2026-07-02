@@ -8,10 +8,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
+    <!-- xlsx-js-style: used for the ESIC Contribution Template (Excel) export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 
     <style>
-    
+    /* ══════════════════════════════════════════
+       NOTE: This build runs entirely on DUMMY / MOCK data.
+       All backend fetch() calls have been removed and replaced
+       with local in-memory data + simulated async delays so the
+       page can be demoed / designed without a live API.
+       Search for "DUMMY DATA" to find the mock dataset.
+    ══════════════════════════════════════════ */
     #header-container {
       position: fixed;
       top: 0;
@@ -113,6 +120,22 @@
         }
         .btn-initiate:hover { box-shadow: 0 5px 16px rgba(27,115,140,0.3); transform: translateY(-1px); }
         .btn-initiate:active { transform: translateY(0); }
+
+        .btn-export {
+            border: 1.5px solid #2e7d32;
+            color: #2e7d32;
+            padding: 9px 16px;
+            border-radius: 8px;
+            background: #f1f9f1;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            transition: all 0.2s;
+        }
+        .btn-export:hover { background-color: #2e7d32; color: white; }
 
         input, select {
             border: 1px solid #62C9EA;
@@ -238,7 +261,7 @@
         input[type="month"]::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; filter: invert(30%) sepia(80%) saturate(400%) hue-rotate(160deg); }
         input[type="month"]::-webkit-calendar-picker-indicator:hover { opacity: 1; }
 
-        /* ── Attendance preview card (NEW) ── */
+        /* ── Attendance preview card ── */
         .attendance-preview {
             display: none;
             background: #f0f9fc;
@@ -250,7 +273,7 @@
         .attendance-preview.show { display: block; }
         .att-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
             gap: 10px;
             margin-top: 10px;
         }
@@ -266,8 +289,11 @@
         .att-pill.lop .att-val  { color: #dc3545; }
         .att-pill.paid .att-val { color: #16a34a; }
         .att-pill.exp .att-val  { color: #0e6fa8; }
+        .att-pill.od .att-val   { color: #7c3aed; }
+        .att-pill.ot .att-val   { color: #ea580c; }
+        .att-pill.coff .att-val { color: #0d9488; }
 
-        /* ── LOP warning banner (NEW) ── */
+        /* ── LOP warning banner ── */
         .lop-warning {
             display: none;
             background: #fff8e6;
@@ -281,6 +307,21 @@
             gap: 8px;
         }
         .lop-warning.show { display: flex; }
+
+        /* ── OD note banner ── */
+        .od-note {
+            display: none;
+            background: #f3e8ff;
+            border: 1px solid #d8b4fe;
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-size: 12.5px;
+            color: #6b21a8;
+            margin-bottom: 16px;
+            align-items: center;
+            gap: 8px;
+        }
+        .od-note.show { display: flex; }
 
         @media (max-width: 768px) {
             .section-card { padding: 16px; }
@@ -341,6 +382,17 @@
                         </select>
                     </div>
                 </div>
+
+                <!-- EPF / ESIC quick export shortcuts -->
+                <div class="flex flex-wrap gap-3 mt-5 pt-5 border-t border-[#e4f3f8]">
+                    <button onclick="downloadEPFTextFile()" class="btn-export">
+                        <i class="fas fa-file-alt"></i> Download EPF Text File
+                    </button>
+                    <button onclick="downloadESICTemplate()" class="btn-export">
+                        <i class="fas fa-file-excel"></i> Download ESIC Contribution Template (Excel)
+                    </button>
+                    <span class="text-[11px] text-gray-400 self-center">Generated for the selected month &amp; department, based on current salary data (demo format).</span>
+                </div>
             </div>
 
             <!-- Initiate Pay Form -->
@@ -379,7 +431,7 @@
                     </span>
                 </div>
 
-                <!-- ── ATTENDANCE PREVIEW (NEW) ── -->
+                <!-- ── ATTENDANCE PREVIEW ── -->
                 <div id="attendancePreview" class="attendance-preview">
                     <div class="flex items-center justify-between">
                         <p class="text-xs font-bold text-[var(--primary)] uppercase tracking-wider">
@@ -395,10 +447,16 @@
                     </div>
                 </div>
 
-                <!-- ── LOP WARNING (NEW) ── -->
+                <!-- ── LOP WARNING ── -->
                 <div id="lopWarning" class="lop-warning">
                     <i class="fas fa-exclamation-triangle text-yellow-600"></i>
                     <span id="lopWarningText"></span>
+                </div>
+
+                <!-- ── OD NOTE (NEW) ── -->
+                <div id="odNote" class="od-note">
+                    <i class="fas fa-route text-purple-600"></i>
+                    <span id="odNoteText"></span>
                 </div>
 
                 <!-- Earnings Section -->
@@ -428,9 +486,29 @@
                                    class="pl-8 w-full px-4 py-2.5 border border-[#62C9EA] rounded-lg text-sm">
                         </div>
                     </div>
+
+                    <!-- OT Amount (Below Assistant Manager) OR C-off Balance (Assistant Manager & above) -->
+                    <div class="form-group" id="otAmountGroup">
+                        <label class="text-xs font-semibold text-[var(--primary)]">
+                            OT Amount <span class="font-normal text-gray-400">(auto from OT hours, editable)</span>
+                        </label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
+                            <input type="number" id="otAmount" placeholder="0.00"
+                                   class="pl-8 w-full px-4 py-2.5 border border-[#62C9EA] rounded-lg text-sm">
+                        </div>
+                    </div>
+                    <div class="form-group hidden" id="coffBalanceGroup">
+                        <label class="text-xs font-semibold text-[var(--primary)]">
+                            C-off Balance <span class="font-normal text-gray-400">(not payable — Asst. Manager &amp; above)</span>
+                        </label>
+                        <input type="text" id="coffBalanceDisplay" readonly value="—"
+                               class="w-full px-4 py-2.5 rounded-lg text-sm">
+                    </div>
+
                     <div class="form-group">
                         <label class="text-xs font-semibold text-[var(--primary)]">Gross Salary
-                            <span class="font-normal text-gray-400">(Basic + HRA + Allowances)</span>
+                            <span class="font-normal text-gray-400">(Basic + HRA + Allowances + OT Amt)</span>
                         </label>
                         <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">₹</span>
@@ -483,15 +561,15 @@
                     </div>
                 </div>
 
-                <!-- ── ESTIMATED NET PREVIEW (NEW) ── -->
+                <!-- ── ESTIMATED NET PREVIEW ── -->
                 <div id="netPreviewBar" class="hidden mt-6 bg-[#EBF4F6] border border-[#b8e4f0] rounded-10px p-4 rounded-xl">
                     <div class="flex flex-wrap items-center justify-between gap-4">
                         <div class="text-xs text-gray-500 font-medium">Estimated Net Pay
-                            <span class="text-[10px] text-gray-400 ml-1">(after LOP deduction &amp; expense reimbursement — computed server-side)</span>
+                            <span class="text-[10px] text-gray-400 ml-1">(after LOP deduction, OT amount &amp; expense reimbursement — computed server-side in production)</span>
                         </div>
                         <div class="text-lg font-bold text-[var(--primary)]" id="netPreviewAmt">₹0</div>
                     </div>
-                    <div class="grid grid-cols-3 gap-3 mt-3 text-xs text-center">
+                    <div class="grid grid-cols-4 gap-3 mt-3 text-xs text-center">
                         <div class="bg-white rounded-lg p-2 border border-[#d4edf5]">
                             <div class="font-bold text-[var(--primary)]" id="previewGross">₹0</div>
                             <div class="text-gray-400 mt-0.5">Gross (est.)</div>
@@ -503,6 +581,10 @@
                         <div class="bg-white rounded-lg p-2 border border-[#d4edf5]">
                             <div class="font-bold text-orange-500" id="previewLop">₹0</div>
                             <div class="text-gray-400 mt-0.5">LOP (est.)</div>
+                        </div>
+                        <div class="bg-white rounded-lg p-2 border border-[#d4edf5]">
+                            <div class="font-bold text-purple-500" id="previewOt">₹0</div>
+                            <div class="text-gray-400 mt-0.5">OT Amt</div>
                         </div>
                     </div>
                 </div>
@@ -567,6 +649,8 @@
                                 <th>Basic</th>
                                 <th>HRA</th>
                                 <th>Allowances</th>
+                                <th class="text-purple-600">OD Days</th>
+                                <th class="text-orange-600">OT Amt</th>
                                 <th>Gross</th>
                                 <th class="text-orange-600">LOP Deduction</th>
                                 <th>Deductions</th>
@@ -591,29 +675,78 @@
     </div>
 </div>
 
-<script src="/assets/js/component-loader.js"></script>  <!-- ← ADD THIS LINE -->
+<script src="/assets/js/component-loader.js"></script>
 <script src="/assets/js/common.js"></script>
 <script src="/assets/js/sidebar.js"></script>
 <script src="/assets/js/header.js"></script>
 
 <script>
-const BASE_PAYROLL_URL = 'http://localhost:8086/api/v1';
-const BASE_EMP_URL     = 'http://localhost:8086/api';
-const BASE_ATT_URL     = 'http://localhost:8086/api';
-const token            = localStorage.getItem('token') || '';
+/* ═══════════════════════════════════════════════════════════════
+   DUMMY DATA  (all backend connectivity removed — everything is
+   generated / computed on the frontend so this page works standalone)
+═══════════════════════════════════════════════════════════════ */
 
 const MONTH_ENUM = {
     '1':'JANUARY','2':'FEBRUARY','3':'MARCH','4':'APRIL','5':'MAY','6':'JUNE',
     '7':'JULY','8':'AUGUST','9':'SEPTEMBER','10':'OCTOBER','11':'NOVEMBER','12':'DECEMBER'
 };
 
-let employeeCache = {};
-let formOpen      = false;
-// Stores last fetched attendance summary keyed by employeeId
-let attSummaryCache = {};
+// Designation seniority ladder — used to decide OT Amount vs C-off Balance
+const DESIGNATION_RANK = {
+    'Junior Developer': 1, 'Trainee': 1, 'Associate': 1,
+    'Software Engineer': 2, 'Sales Executive': 2, 'HR Executive': 2, 'Executive': 2, 'Accountant': 2,
+    'Senior Executive': 3, 'Senior Software Engineer': 3,
+    'Assistant Manager': 4,
+    'Manager': 5,
+    'Senior Manager': 6,
+    'Deputy General Manager': 7,
+    'General Manager': 8,
+    'Director': 9
+};
+const ASST_MGR_RANK = DESIGNATION_RANK['Assistant Manager']; // 4
+function isBelowAsstManager(designation) {
+    const rank = DESIGNATION_RANK[designation] !== undefined ? DESIGNATION_RANK[designation] : 1;
+    return rank < ASST_MGR_RANK;
+}
+
+// DUMMY employee master
+const DUMMY_EMPLOYEES = [
+    { employeeId:'EMP001', employeePrimeId:'PRM001', fullName:'Rahul Sharma',   designation:'Software Engineer',  department:'IT',               basicSalary:45000 },
+    { employeeId:'EMP002', employeePrimeId:'PRM002', fullName:'Priya Verma',    designation:'HR Executive',       department:'Human Resources',  basicSalary:38000 },
+    { employeeId:'EMP003', employeePrimeId:'PRM003', fullName:'Amit Kumar',     designation:'Assistant Manager',  department:'Finance',          basicSalary:65000 },
+    { employeeId:'EMP004', employeePrimeId:'PRM004', fullName:'Sneha Patil',    designation:'Sales Executive',    department:'Sales',            basicSalary:32000 },
+    { employeeId:'EMP005', employeePrimeId:'PRM005', fullName:'Vikram Singh',   designation:'Manager',            department:'IT',               basicSalary:85000 },
+    { employeeId:'EMP006', employeePrimeId:'PRM006', fullName:'Anjali Deshmukh',designation:'Junior Developer',   department:'IT',               basicSalary:28000 }
+];
+
+// DUMMY attendance summary per employee (used for the selected month, regardless of which month is picked, for demo purposes)
+const DUMMY_ATTENDANCE = {
+    EMP001: { present:22, late:1, paidLeaveWeeklyOff:4, unpaidLeave:1, odDays:2, otHours:6,  coffDays:0, coffBalance:1, totalWorkingDays:26 },
+    EMP002: { present:24, late:0, paidLeaveWeeklyOff:4, unpaidLeave:0, odDays:1, otHours:0,  coffDays:1, coffBalance:2, totalWorkingDays:26 },
+    EMP003: { present:23, late:0, paidLeaveWeeklyOff:4, unpaidLeave:0, odDays:3, otHours:0,  coffDays:0, coffBalance:3, totalWorkingDays:26 },
+    EMP004: { present:20, late:2, paidLeaveWeeklyOff:4, unpaidLeave:2, odDays:0, otHours:8,  coffDays:0, coffBalance:0, totalWorkingDays:26 },
+    EMP005: { present:25, late:0, paidLeaveWeeklyOff:4, unpaidLeave:0, odDays:1, otHours:0,  coffDays:0, coffBalance:4, totalWorkingDays:26 },
+    EMP006: { present:21, late:1, paidLeaveWeeklyOff:4, unpaidLeave:1, odDays:2, otHours:10, coffDays:0, coffBalance:0, totalWorkingDays:26 }
+};
+
+const OT_RATE_PER_HOUR = 200; // ₹/hour, demo rate used to auto-compute OT amount
+
+// DUMMY payroll summary + salary list rows (already-processed records shown below the form)
+const DUMMY_SALARY_ROWS = [
+    { fullName:'Rahul Sharma',    department:'IT',              basicSalary:45000, hra:22500, allowances:3000, odDays:2, otAmount:1200, grossSalary:70500, lopDeduction:1731, totalDeductions:10800, expenseReimbursement:1500, netSalary:59469 },
+    { fullName:'Priya Verma',     department:'Human Resources', basicSalary:38000, hra:19000, allowances:2000, odDays:1, otAmount:0,    grossSalary:59000, lopDeduction:0,    totalDeductions:9120,  expenseReimbursement:0,    netSalary:49880 },
+    { fullName:'Amit Kumar',      department:'Finance',         basicSalary:65000, hra:32500, allowances:5000, odDays:3, otAmount:0,    grossSalary:102500,lopDeduction:0,    totalDeductions:15600, expenseReimbursement:2200, netSalary:89100 },
+    { fullName:'Sneha Patil',     department:'Sales',           basicSalary:32000, hra:16000, allowances:1500, odDays:0, otAmount:1600, grossSalary:51100, lopDeduction:2462, totalDeductions:7680,  expenseReimbursement:0,    netSalary:40958 },
+    { fullName:'Vikram Singh',    department:'IT',              basicSalary:85000, hra:42500, allowances:6000, odDays:1, otAmount:0,    grossSalary:133500,lopDeduction:0,    totalDeductions:20400, expenseReimbursement:3000, netSalary:116100 },
+    { fullName:'Anjali Deshmukh', department:'IT',              basicSalary:28000, hra:14000, allowances:1000, odDays:2, otAmount:2000, grossSalary:45000, lopDeduction:1077, totalDeductions:6720,  expenseReimbursement:0,    netSalary:37203 }
+];
+
+let employeeCache   = {};
+let formOpen        = false;
+let attSummaryCache = {}; // employeeId -> { absent, totalDays, odDays, otHours, coffDays, coffBalance }
 
 // ─────────────────────────────────────────────────────────────────
-// MONTH PICKER HELPERS  (unchanged from original)
+// MONTH PICKER HELPERS
 // ─────────────────────────────────────────────────────────────────
 function getSelectedMonthYear() {
     const raw = document.getElementById('payrollMonth').value;
@@ -642,14 +775,6 @@ function initMonthPicker() {
     document.getElementById('payrollMonth').value = `${yyyy}-${mm}`;
 }
 
-function authHeaders() {
-    return {
-        'Content-Type'  : 'application/json',
-        'Authorization' : `Bearer ${token}`,
-        'X-Initiated-By': 'hr.admin'
-    };
-}
-
 // ─────────────────────────────────────────────────────────────────
 // PAGE LOAD
 // ─────────────────────────────────────────────────────────────────
@@ -667,106 +792,108 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // ─────────────────────────────────────────────────────────────────
-// LOAD SUMMARY + SALARY LIST  (unchanged)
+// LOAD SUMMARY + SALARY LIST — now purely from DUMMY_SALARY_ROWS
 // ─────────────────────────────────────────────────────────────────
 async function loadPageData() {
-    const { monthEnum, year } = getSelectedMonthYear();
+    const { label } = getSelectedMonthYear();
     const dept = document.getElementById('payrollDept').value;
-    await Promise.all([loadSummary(monthEnum, year, dept), loadSalaryList(monthEnum, year, dept)]);
+    await simulateDelay(200);
+    loadSummary(label, dept);
+    loadSalaryList(dept);
 }
 
-async function loadSummary(month, year, dept) {
-    try {
-        const res  = await fetch(`${BASE_PAYROLL_URL}/payroll/summary?month=${month}&year=${year}&department=${dept}`, { headers: authHeaders() });
-        const json = await res.json();
-        if (json.success && json.data && json.data.totalEmployees > 0) {
-            document.getElementById('payrollSummary').style.display = 'block';
-            document.getElementById('totalEmployees').textContent         = json.data.totalEmployees;
-            document.getElementById('totalGross').textContent             = formatINR(json.data.totalGrossSalary);
-            document.getElementById('totalDeductionsSummary').textContent = formatINR(json.data.totalDeductions);
-            document.getElementById('totalNetPayable').textContent        = formatINR(json.data.totalNetPayable);
-            const { label } = getSelectedMonthYear();
-            document.querySelector('#payrollSummary h3').innerHTML =
-                `<i class="fas fa-chart-bar"></i> Payroll Summary — ${label}`;
-        } else {
-            document.getElementById('payrollSummary').style.display = 'none';
-        }
-    } catch (err) { console.error('Summary load failed:', err); }
+function simulateDelay(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+function loadSummary(label, dept) {
+    const rows = dept === 'all' ? DUMMY_SALARY_ROWS : DUMMY_SALARY_ROWS.filter(r => r.department === dept);
+    if (rows.length > 0) {
+        const totalGross = rows.reduce((s,r)=>s+r.grossSalary,0);
+        const totalDed    = rows.reduce((s,r)=>s+r.totalDeductions+r.lopDeduction,0);
+        const totalNet    = rows.reduce((s,r)=>s+r.netSalary,0);
+        document.getElementById('payrollSummary').style.display = 'block';
+        document.getElementById('totalEmployees').textContent         = rows.length;
+        document.getElementById('totalGross').textContent             = formatINR(totalGross);
+        document.getElementById('totalDeductionsSummary').textContent = formatINR(totalDed);
+        document.getElementById('totalNetPayable').textContent        = formatINR(totalNet);
+        document.querySelector('#payrollSummary h3').innerHTML =
+            `<i class="fas fa-chart-bar"></i> Payroll Summary — ${label}`;
+    } else {
+        document.getElementById('payrollSummary').style.display = 'none';
+    }
 }
 
-async function loadSalaryList(month, year, dept) {
-    try {
-        const res  = await fetch(`${BASE_PAYROLL_URL}/payroll/list?month=${month}&year=${year}&department=${dept}`, { headers: authHeaders() });
-        const json = await res.json();
-        const tbody    = document.getElementById('salaryList');
-        const listCard = document.getElementById('employeeSalaryList');
+function loadSalaryList(dept) {
+    const rows = dept === 'all' ? DUMMY_SALARY_ROWS : DUMMY_SALARY_ROWS.filter(r => r.department === dept);
+    const tbody    = document.getElementById('salaryList');
+    const listCard = document.getElementById('employeeSalaryList');
 
-        if (json.success && json.data && json.data.length > 0) {
-            listCard.style.display = 'block';
-            tbody.innerHTML = json.data.map(r => {
-                const lopAmt  = r.lopDeduction          || 0;
-                const expAmt  = r.expenseReimbursement  || 0;
-                const lopHtml = lopAmt > 0
-                    ? `<span class="text-orange-600 font-semibold">-${formatINR(lopAmt)}</span>`
-                    : `<span class="text-gray-400 text-xs">—</span>`;
-                const expHtml = expAmt > 0
-                    ? `<span class="text-blue-600 font-semibold">+${formatINR(expAmt)}</span>`
-                    : `<span class="text-gray-400 text-xs">—</span>`;
-                return `
-                <tr>
-                    <td class="font-semibold text-[var(--primary)]">${r.fullName}</td>
-                    <td><span class="badge">${r.department || '—'}</span></td>
-                    <td>${formatINR(r.basicSalary)}</td>
-                    <td>${formatINR(r.hra)}</td>
-                    <td>${formatINR(r.allowances)}</td>
-                    <td class="font-semibold">${formatINR(r.grossSalary)}</td>
-                    <td>${lopHtml}</td>
-                    <td class="text-red-600">${formatINR(r.totalDeductions)}</td>
-                    <td>${expHtml}</td>
-                    <td class="font-bold text-green-600">${formatINR(r.netSalary)}</td>
-                </tr>`;
-            }).join('');
-        } else {
-            listCard.style.display = 'none';
-            tbody.innerHTML = '';
-        }
-    } catch (err) { console.error('Salary list load failed:', err); }
+    if (rows.length > 0) {
+        listCard.style.display = 'block';
+        tbody.innerHTML = rows.map(r => {
+            const lopAmt  = r.lopDeduction || 0;
+            const expAmt  = r.expenseReimbursement || 0;
+            const otAmt   = r.otAmount || 0;
+            const lopHtml = lopAmt > 0
+                ? `<span class="text-orange-600 font-semibold">-${formatINR(lopAmt)}</span>`
+                : `<span class="text-gray-400 text-xs">—</span>`;
+            const expHtml = expAmt > 0
+                ? `<span class="text-blue-600 font-semibold">+${formatINR(expAmt)}</span>`
+                : `<span class="text-gray-400 text-xs">—</span>`;
+            const otHtml  = otAmt > 0
+                ? `<span class="text-orange-500 font-semibold">${formatINR(otAmt)}</span>`
+                : `<span class="text-gray-400 text-xs">—</span>`;
+            return `
+            <tr>
+                <td class="font-semibold text-[var(--primary)]">${r.fullName}</td>
+                <td><span class="badge">${r.department || '—'}</span></td>
+                <td>${formatINR(r.basicSalary)}</td>
+                <td>${formatINR(r.hra)}</td>
+                <td>${formatINR(r.allowances)}</td>
+                <td class="text-purple-600 font-semibold">${r.odDays}</td>
+                <td>${otHtml}</td>
+                <td class="font-semibold">${formatINR(r.grossSalary)}</td>
+                <td>${lopHtml}</td>
+                <td class="text-red-600">${formatINR(r.totalDeductions)}</td>
+                <td>${expHtml}</td>
+                <td class="font-bold text-green-600">${formatINR(r.netSalary)}</td>
+            </tr>`;
+        }).join('');
+    } else {
+        listCard.style.display = 'none';
+        tbody.innerHTML = '';
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// EMPLOYEE DROPDOWN  (unchanged)
+// EMPLOYEE DROPDOWN — from DUMMY_EMPLOYEES
 // ─────────────────────────────────────────────────────────────────
 async function loadEmployeeDropdown() {
     const dept   = document.getElementById('payrollDept').value;
     const select = document.getElementById('initiateEmployee');
     select.innerHTML = '<option value="">Loading…</option>';
     select.disabled  = true;
-    try {
-        const res  = await fetch(`${BASE_EMP_URL}/employees/payroll-list?department=${dept}`, { headers: authHeaders() });
-        const json = await res.json();
-        employeeCache = {};
-        select.innerHTML = '<option value="">— Select Employee —</option>';
-        if (json.success && json.data && json.data.length > 0) {
-            json.data.forEach(emp => {
-                employeeCache[emp.employeeId] = emp;
-                const opt = document.createElement('option');
-                opt.value       = emp.employeeId;
-                opt.textContent = emp.fullName;
-                select.appendChild(opt);
-            });
-        } else {
-            select.innerHTML = '<option value="">No active employees in this department</option>';
-        }
-    } catch (err) {
-        select.innerHTML = '<option value="">Failed to load employees</option>';
-        showToast('Could not load employee list.', 'error');
-    } finally {
-        select.disabled = false;
+
+    await simulateDelay(150);
+
+    const list = dept === 'all' ? DUMMY_EMPLOYEES : DUMMY_EMPLOYEES.filter(e => e.department === dept);
+    employeeCache = {};
+    select.innerHTML = '<option value="">— Select Employee —</option>';
+    if (list.length > 0) {
+        list.forEach(emp => {
+            employeeCache[emp.employeeId] = emp;
+            const opt = document.createElement('option');
+            opt.value       = emp.employeeId;
+            opt.textContent = emp.fullName;
+            select.appendChild(opt);
+        });
+    } else {
+        select.innerHTML = '<option value="">No active employees in this department</option>';
     }
+    select.disabled = false;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// TOGGLE FORM  (unchanged)
+// TOGGLE FORM
 // ─────────────────────────────────────────────────────────────────
 function toggleInitiateForm() {
     formOpen = !formOpen;
@@ -782,8 +909,11 @@ function resetForm() {
     document.getElementById('empMetaRow').classList.remove('flex');
     document.getElementById('attendancePreview').classList.remove('show');
     document.getElementById('lopWarning').classList.remove('show');
+    document.getElementById('odNote').classList.remove('show');
     document.getElementById('netPreviewBar').classList.add('hidden');
-    ['basicSalary','hraAmount','allowancesAmt','grossSalary',
+    document.getElementById('otAmountGroup').classList.remove('hidden');
+    document.getElementById('coffBalanceGroup').classList.add('hidden');
+    ['basicSalary','hraAmount','allowancesAmt','grossSalary','otAmount',
      'employeePf','employerPf','esiAmount','tdsAmount'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -793,7 +923,7 @@ function resetForm() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// ON EMPLOYEE SELECT — prefill + fetch attendance preview (NEW)
+// ON EMPLOYEE SELECT — prefill + fetch attendance preview
 // ─────────────────────────────────────────────────────────────────
 async function onEmployeeSelect() {
     const empId   = document.getElementById('initiateEmployee').value;
@@ -804,6 +934,7 @@ async function onEmployeeSelect() {
         metaRow.classList.remove('flex');
         document.getElementById('attendancePreview').classList.remove('show');
         document.getElementById('lopWarning').classList.remove('show');
+        document.getElementById('odNote').classList.remove('show');
         document.getElementById('netPreviewBar').classList.add('hidden');
         resetFieldsOnly();
         return;
@@ -834,14 +965,37 @@ async function onEmployeeSelect() {
     document.getElementById('esiAmount').value     = '';
     document.getElementById('tdsAmount').value     = '';
 
+    // Show/Hide OT Amount vs C-off Balance based on designation
+    toggleOtOrCoffField(emp);
+
     // Fetch attendance preview for selected month
     await fetchAttendancePreview(emp);
     updateNetPreview();
 }
 
 // ─────────────────────────────────────────────────────────────────
-// FETCH ATTENDANCE PREVIEW  (NEW)
-// Calls /api/attendance/summary/{employeePrimeId}?month=YYYY-MM
+// TOGGLE OT AMOUNT vs C-OFF BALANCE (NEW)
+// Below Assistant Manager  -> OT Amount field shown & editable
+// Assistant Manager & above -> OT Amount hidden, C-off Balance shown instead
+// ─────────────────────────────────────────────────────────────────
+function toggleOtOrCoffField(emp) {
+    const otGroup   = document.getElementById('otAmountGroup');
+    const coffGroup = document.getElementById('coffBalanceGroup');
+    if (isBelowAsstManager(emp.designation)) {
+        otGroup.classList.remove('hidden');
+        coffGroup.classList.add('hidden');
+        document.getElementById('otAmount').value = 0;
+    } else {
+        otGroup.classList.add('hidden');
+        coffGroup.classList.remove('hidden');
+        document.getElementById('otAmount').value = 0; // OT amount not applicable, kept at 0 for gross calc
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// FETCH ATTENDANCE PREVIEW — from DUMMY_ATTENDANCE
+// OD (On Duty) is treated as a present/payable day and never
+// contributes to the LOP calculation.
 // ─────────────────────────────────────────────────────────────────
 async function fetchAttendancePreview(emp) {
     const preview  = document.getElementById('attendancePreview');
@@ -849,97 +1003,120 @@ async function fetchAttendancePreview(emp) {
     const attMonth = document.getElementById('attMonth');
     const grid     = document.getElementById('attGrid');
 
-    const { monthEnum, year, label } = getSelectedMonthYear();
-    const monthNum = String(Object.values(MONTH_ENUM).indexOf(monthEnum) + 1).padStart(2, '0');
-    const monthStr = `${year}-${monthNum}`;
+    const { label } = getSelectedMonthYear();
 
     preview.classList.add('show');
     spinner.classList.remove('hidden');
     attMonth.textContent = `— ${label}`;
     grid.innerHTML = '';
 
-    try {
-        const res  = await fetch(
-            `${BASE_ATT_URL}/attendance/summary/${emp.employeePrimeId}?month=${monthStr}`,
-            { headers: authHeaders() }
-        );
-        const data = await res.json();
+    await simulateDelay(300);
 
-        spinner.classList.add('hidden');
+    const data = DUMMY_ATTENDANCE[emp.employeeId] || {
+        present:0, late:0, paidLeaveWeeklyOff:0, unpaidLeave:0, odDays:0, otHours:0, coffDays:0, coffBalance:0, totalWorkingDays:26
+    };
 
-        const present    = (data.daysWorkedPresent   || 0);
-        const paidLeave  = (data.paidLeaveWeeklyOff  || 0);
-        const absent     = (data.unpaidLeave          || 0);
-        const late       = (data.lateDays             || 0);
-        const payable    = (data.payableDays          || 0);
-        const totalDays  = (data.totalWorkingDays     || 26);
+    spinner.classList.add('hidden');
 
-        // Cache for net preview estimate
-        attSummaryCache[emp.employeeId] = { absent, totalDays };
+    const present   = data.present || 0;
+    const paidLeave = data.paidLeaveWeeklyOff || 0;
+    const absent    = data.unpaidLeave || 0;      // this is the ONLY thing that drives LOP
+    const late      = data.late || 0;
+    const odDays    = data.odDays || 0;            // OD is counted as present, never LOP
+    const otHours   = data.otHours || 0;
+    const coffDays  = data.coffDays || 0;
+    const coffBal   = data.coffBalance || 0;
+    const totalDays = data.totalWorkingDays || 26;
+    // Payable days = everything except unpaid leave (OD counts as payable/present)
+    const payable   = totalDays - absent;
+    const otAutoAmount = otHours * OT_RATE_PER_HOUR;
 
-        // Show LOP warning if absences exist
-        const lopWarn = document.getElementById('lopWarning');
-        if (absent > 0) {
-            document.getElementById('lopWarningText').textContent =
-                `${absent} absent day(s) detected — LOP deduction will be auto-computed server-side.`;
-            lopWarn.classList.add('show');
-        } else {
-            lopWarn.classList.remove('show');
-        }
+    // Cache for net preview estimate
+    attSummaryCache[emp.employeeId] = { absent, totalDays, odDays, otHours, coffDays, coffBalance: coffBal };
 
-        grid.innerHTML = `
-            <div class="att-pill">
-                <div class="att-val">${present}</div>
-                <div class="att-lbl">Present</div>
-            </div>
-            <div class="att-pill">
-                <div class="att-val">${late}</div>
-                <div class="att-lbl">Late</div>
-            </div>
-            <div class="att-pill paid">
-                <div class="att-val">${paidLeave}</div>
-                <div class="att-lbl">Paid Leave</div>
-            </div>
-            <div class="att-pill lop">
-                <div class="att-val">${absent}</div>
-                <div class="att-lbl">Absent / LOP</div>
-            </div>
-            <div class="att-pill">
-                <div class="att-val">${payable}</div>
-                <div class="att-lbl">Payable Days</div>
-            </div>
-            <div class="att-pill">
-                <div class="att-val">${totalDays}</div>
-                <div class="att-lbl">Working Days</div>
-            </div>`;
-
-    } catch (err) {
-        spinner.classList.add('hidden');
-        grid.innerHTML = `<p class="text-xs text-gray-400 col-span-full py-2">
-            <i class="fas fa-info-circle mr-1"></i>
-            Attendance data not available for this month — LOP will still be computed server-side.
-        </p>`;
-        console.warn('Attendance preview failed:', err);
+    // Auto-fill OT amount if applicable
+    if (isBelowAsstManager(emp.designation)) {
+        document.getElementById('otAmount').value = otAutoAmount;
     }
+    document.getElementById('coffBalanceDisplay').value = coffBal + ' day(s)';
+
+    // LOP warning — driven only by "absent" (unpaid leave), NOT by OD
+    const lopWarn = document.getElementById('lopWarning');
+    if (absent > 0) {
+        document.getElementById('lopWarningText').textContent =
+            `${absent} absent day(s) detected — LOP deduction will be auto-computed. (On-Duty days are excluded from LOP.)`;
+        lopWarn.classList.add('show');
+    } else {
+        lopWarn.classList.remove('show');
+    }
+
+    // OD note — informational, clarifies OD is treated as present
+    const odNote = document.getElementById('odNote');
+    if (odDays > 0) {
+        document.getElementById('odNoteText').textContent =
+            `${odDays} On-Duty (OD) day(s) this month — counted as Present, not deducted as LOP.`;
+        odNote.classList.add('show');
+    } else {
+        odNote.classList.remove('show');
+    }
+
+    grid.innerHTML = `
+        <div class="att-pill">
+            <div class="att-val">${present}</div>
+            <div class="att-lbl">Present</div>
+        </div>
+        <div class="att-pill">
+            <div class="att-val">${late}</div>
+            <div class="att-lbl">Late</div>
+        </div>
+        <div class="att-pill paid">
+            <div class="att-val">${paidLeave}</div>
+            <div class="att-lbl">Paid Leave</div>
+        </div>
+        <div class="att-pill od">
+            <div class="att-val">${odDays}</div>
+            <div class="att-lbl">OD Days</div>
+        </div>
+        <div class="att-pill lop">
+            <div class="att-val">${absent}</div>
+            <div class="att-lbl">Absent / LOP</div>
+        </div>
+        <div class="att-pill ot">
+            <div class="att-val">${otHours}</div>
+            <div class="att-lbl">OT Hours</div>
+        </div>
+        <div class="att-pill coff">
+            <div class="att-val">${coffDays}</div>
+            <div class="att-lbl">C-off Days</div>
+        </div>
+        <div class="att-pill">
+            <div class="att-val">${payable}</div>
+            <div class="att-lbl">Payable Days</div>
+        </div>
+        <div class="att-pill">
+            <div class="att-val">${totalDays}</div>
+            <div class="att-lbl">Working Days</div>
+        </div>`;
 }
 
 // ─────────────────────────────────────────────────────────────────
-// NET PREVIEW (client-side estimate only — actual computed server-side)
+// NET PREVIEW (client-side estimate only)
 // ─────────────────────────────────────────────────────────────────
 function updateNetPreview() {
     const basic      = parseFloat(document.getElementById('basicSalary').value)   || 0;
     const hra        = parseFloat(document.getElementById('hraAmount').value)      || 0;
     const allowances = parseFloat(document.getElementById('allowancesAmt').value)  || 0;
+    const otAmt      = parseFloat(document.getElementById('otAmount').value)       || 0;
     const empPf      = parseFloat(document.getElementById('employeePf').value)     || 0;
     const esi        = parseFloat(document.getElementById('esiAmount').value)      || 0;
     const tds        = parseFloat(document.getElementById('tdsAmount').value)      || 0;
 
     if (basic === 0) return;
 
-    const gross       = basic + hra + allowances;
+    const gross       = basic + hra + allowances + otAmt;
     const deductions  = empPf + esi + tds;
 
-    // Rough LOP estimate from cached attendance
+    // Rough LOP estimate from cached attendance — OD days are NOT counted toward LOP
     const empId = document.getElementById('initiateEmployee').value;
     const att   = attSummaryCache[empId] || { absent: 0, totalDays: 26 };
     const estLop = att.totalDays > 0
@@ -952,16 +1129,18 @@ function updateNetPreview() {
     document.getElementById('previewGross').textContent = formatINR(gross);
     document.getElementById('previewDed').textContent   = formatINR(deductions);
     document.getElementById('previewLop').textContent   = estLop > 0 ? `-${formatINR(estLop)}` : '₹0';
+    document.getElementById('previewOt').textContent    = otAmt > 0 ? formatINR(otAmt) : '₹0';
     document.getElementById('netPreviewAmt').textContent = formatINR(Math.max(0, estNet));
 }
 
 // Auto-compute gross when earnings change
-['basicSalary','hraAmount','allowancesAmt'].forEach(id => {
+['basicSalary','hraAmount','allowancesAmt','otAmount'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', () => {
         const basic      = parseFloat(document.getElementById('basicSalary').value)   || 0;
         const hra        = parseFloat(document.getElementById('hraAmount').value)      || 0;
         const allowances = parseFloat(document.getElementById('allowancesAmt').value)  || 0;
-        document.getElementById('grossSalary').value = basic + hra + allowances;
+        const otAmt      = parseFloat(document.getElementById('otAmount').value)       || 0;
+        document.getElementById('grossSalary').value = basic + hra + allowances + otAmt;
         updateNetPreview();
     });
 });
@@ -980,7 +1159,7 @@ document.getElementById('basicSalary')?.addEventListener('input', () => {
 });
 
 function resetFieldsOnly() {
-    ['basicSalary','hraAmount','allowancesAmt','grossSalary',
+    ['basicSalary','hraAmount','allowancesAmt','grossSalary','otAmount',
      'employeePf','employerPf','esiAmount','tdsAmount'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
@@ -988,7 +1167,7 @@ function resetFieldsOnly() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// SUBMIT  (unchanged logic — payload identical to original)
+// SUBMIT — now simulated locally (no backend call)
 // ─────────────────────────────────────────────────────────────────
 async function submitInitiatePay() {
     const empId = document.getElementById('initiateEmployee').value;
@@ -1005,12 +1184,14 @@ async function submitInitiatePay() {
         basicSalary : parseFloat(document.getElementById('basicSalary').value)   || 0,
         hra         : parseFloat(document.getElementById('hraAmount').value)      || 0,
         allowances  : parseFloat(document.getElementById('allowancesAmt').value)  || 0,
+        otAmount    : parseFloat(document.getElementById('otAmount').value)       || 0,
         employeePf  : parseFloat(document.getElementById('employeePf').value)     || 0,
         employerPf  : parseFloat(document.getElementById('employerPf').value)     || 0,
         esi         : parseFloat(document.getElementById('esiAmount').value)      || 0,
         tds         : parseFloat(document.getElementById('tdsAmount').value)      || 0,
         remarks     : ''
     };
+    console.log('[DEMO] Pay run payload (no backend call made):', payload);
 
     const statusDiv  = document.getElementById('processStatus');
     const progressEl = document.getElementById('processProgress');
@@ -1020,43 +1201,127 @@ async function submitInitiatePay() {
 
     let pct = 0;
     const fakeProgress = setInterval(() => {
-        if (pct < 60) { pct += 5; progressEl.style.width = pct + '%'; }
-    }, 80);
+        if (pct < 90) { pct += 10; progressEl.style.width = pct + '%'; }
+    }, 90);
 
-    try {
-        const res  = await fetch(`${BASE_PAYROLL_URL}/payroll/create-payroll`, {
-            method : 'POST',
-            headers: authHeaders(),
-            body   : JSON.stringify(payload)
+    await simulateDelay(900);
+    clearInterval(fakeProgress);
+
+    progressEl.style.width = '100%';
+    textEl.textContent = 'Processing complete! 100%';
+
+    // Add the new row into the dummy list so the UI reflects it immediately
+    const emp = employeeCache[empId];
+    if (emp) {
+        const gross = payload.basicSalary + payload.hra + payload.allowances + payload.otAmount;
+        const totalDeductions = payload.employeePf + payload.esi + payload.tds;
+        const att = attSummaryCache[empId] || { absent:0, totalDays:26, odDays:0 };
+        const lopDeduction = att.totalDays > 0
+            ? Math.round((payload.basicSalary / att.totalDays) * att.absent)
+            : 0;
+        DUMMY_SALARY_ROWS.push({
+            fullName: emp.fullName, department: emp.department,
+            basicSalary: payload.basicSalary, hra: payload.hra, allowances: payload.allowances,
+            odDays: att.odDays || 0, otAmount: payload.otAmount,
+            grossSalary: gross, lopDeduction, totalDeductions,
+            expenseReimbursement: 0,
+            netSalary: gross - totalDeductions - lopDeduction
         });
-        const json = await res.json();
-        clearInterval(fakeProgress);
+    }
 
-        if (json.success) {
-            progressEl.style.width = '100%';
-            textEl.textContent = 'Processing complete! 100%';
-            setTimeout(async () => {
-                statusDiv.style.display = 'none';
-                progressEl.style.width  = '0%';
-                showToast(json.message || 'Pay run completed successfully!', 'success');
-                toggleInitiateForm();
-                await loadPageData();
-            }, 500);
-        } else {
-            statusDiv.style.display = 'none';
-            progressEl.style.width  = '0%';
-            showToast(json.message || 'Pay run failed. Please try again.', 'error');
-        }
-    } catch (err) {
-        clearInterval(fakeProgress);
+    setTimeout(async () => {
         statusDiv.style.display = 'none';
         progressEl.style.width  = '0%';
-        showToast('Network error. Please check your connection.', 'error');
-    }
+        showToast('Pay run completed successfully! (demo data)', 'success');
+        toggleInitiateForm();
+        await loadPageData();
+    }, 500);
 }
 
 // ─────────────────────────────────────────────────────────────────
-// UTILITIES  (unchanged)
+// EPF TEXT FILE EXPORT  (NEW — demo / sample ECR-style format)
+// ─────────────────────────────────────────────────────────────────
+function downloadEPFTextFile() {
+    const dept = document.getElementById('payrollDept').value;
+    const { label, monthEnum, year } = getSelectedMonthYear();
+    const rows = dept === 'all' ? DUMMY_SALARY_ROWS : DUMMY_SALARY_ROWS.filter(r => r.department === dept);
+
+    if (!rows.length) { showToast('No salary data available to export.', 'error'); return; }
+
+    // Simplified/sample EPF ECR-style pipe-delimited text file.
+    // Format (per line): UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages#~#EPFContribution#~#EPSContribution#~#EPFEPSDiff#~#NCPDays#~#Refund
+    let lines = [];
+    lines.push(`# DEMO EPF ECR TEXT FILE — ${label} — Department: ${dept === 'all' ? 'All' : dept}`);
+    lines.push(`# Format: UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages#~#EPFContribution#~#EPSContribution#~#EPFEPSDiff#~#NCPDays#~#Refund`);
+    rows.forEach((r, idx) => {
+        const uan = '1009' + String(1000000 + idx).padStart(9, '0'); // dummy UAN
+        const epfWages = r.basicSalary;
+        const epsWages = Math.min(epfWages, 15000);
+        const epfContribution = Math.round(epfWages * 0.12);
+        const epsContribution = Math.round(epsWages * 0.0833);
+        const epfEpsDiff = epfContribution - epsContribution;
+        lines.push([
+            uan, r.fullName, r.grossSalary, epfWages, epsWages, epfWages,
+            epfContribution, epsContribution, epfEpsDiff, 0, 0
+        ].join('#~#'));
+    });
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `EPF_ECR_${monthEnum || 'MONTH'}_${year || ''}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('EPF text file downloaded (demo format).', 'success');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ESIC CONTRIBUTION TEMPLATE (Excel) EXPORT  (NEW)
+// ─────────────────────────────────────────────────────────────────
+function downloadESICTemplate() {
+    if (typeof XLSX === 'undefined') { showToast('Excel library not loaded.', 'error'); return; }
+
+    const dept = document.getElementById('payrollDept').value;
+    const { label, monthEnum, year } = getSelectedMonthYear();
+    const rows = dept === 'all' ? DUMMY_SALARY_ROWS : DUMMY_SALARY_ROWS.filter(r => r.department === dept);
+
+    if (!rows.length) { showToast('No salary data available to export.', 'error'); return; }
+
+    const wsData = [];
+    wsData.push([`ESIC Contribution Template — ${label} (Demo)`]);
+    wsData.push([`Department: ${dept === 'all' ? 'All' : dept}`]);
+    wsData.push([]);
+    wsData.push(['Sr. No.','IP Number (dummy)','Employee Name','Days Worked','Total Wages (₹)','Employee Contribution 0.75% (₹)','Employer Contribution 3.25% (₹)','Total Contribution (₹)']);
+
+    rows.forEach((r, idx) => {
+        const ipNumber   = '51' + String(100000 + idx).padStart(10, '0');
+        const wages      = r.grossSalary;
+        const empContrib = Math.round(wages * 0.0075);
+        const emplrContrib = Math.round(wages * 0.0325);
+        wsData.push([idx + 1, ipNumber, r.fullName, 26, wages, empContrib, emplrContrib, empContrib + emplrContrib]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:7} }, { s:{r:1,c:0}, e:{r:1,c:7} }];
+    ws['A1'].s = { font:{ bold:true, sz:13, color:{rgb:'FFFFFFFF'} }, fill:{ patternType:'solid', fgColor:{rgb:'FF1B738C'} }, alignment:{horizontal:'center'} };
+    ws['A2'].s = { font:{ italic:true, sz:10, color:{rgb:'FF1B738C'} }, alignment:{horizontal:'center'} };
+    ['A','B','C','D','E','F','G','H'].forEach(col => {
+        const addr = col + '4';
+        if (ws[addr]) ws[addr].s = { font:{bold:true, color:{rgb:'FFFFFFFF'}}, fill:{patternType:'solid', fgColor:{rgb:'FF1B738C'}}, alignment:{horizontal:'center', wrapText:true} };
+    });
+    ws['!cols'] = [{wch:8},{wch:16},{wch:22},{wch:12},{wch:14},{wch:20},{wch:20},{wch:18}];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ESIC Contribution');
+    XLSX.writeFile(wb, `ESIC_Template_${monthEnum || 'MONTH'}_${year || ''}.xlsx`);
+    showToast('ESIC contribution template downloaded (demo format).', 'success');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// UTILITIES
 // ─────────────────────────────────────────────────────────────────
 function formatINR(amount) {
     if (amount == null || amount === 0) return '₹0';

@@ -318,25 +318,105 @@
     <script src="/assets/js/header.js"></script>
 
     <script>
-    // ============================================================
-    //  DASHBOARD API INTEGRATION
-    // ============================================================
+    /* ============================================================
+       DASHBOARD — 100% FRONTEND-MANAGED (NO BACKEND / NO API CALLS)
+       ------------------------------------------------------------
+       Everything the dashboard shows is generated and stored on the
+       client using localStorage as a lightweight "database". This
+       lets the page work standalone with no server, while still
+       behaving like a real, stateful dashboard (approvals actually
+       get removed, activity feed grows, etc. — all persisted in the
+       browser).
 
-    const API_BASE_DASHBOARD = 'http://localhost:8086/api/dashboard';
+       To seed/replace this with your own numbers later, just edit
+       the arrays inside DASHBOARD_SEED below.
+       ============================================================ */
 
-    // chart color palette — index-based, consistent with backend order
+    // chart color palette — index based
     const DEPT_COLORS = ['#1B738C','#62C9EA','#BDE4EE','#166278','#0F4C5C','#8ED1E6',
                          '#2A9D8F','#E9C46A','#F4A261','#E76F51','#264653','#A8DADC'];
+
+    const STORAGE_KEY = 'hrms_dashboard_state_v1';
 
     let attendanceChartInstance = null;
     let departmentChartInstance = null;
     let currentRange = 'week';
 
-    // ── initialise on load ──────────────────────────────────────
+    /* ============================================================
+       SEED DATA — starting point used the very first time the page
+       loads on a browser (no saved state yet). Edit these values to
+       match your real company data.
+       ============================================================ */
+    const DASHBOARD_SEED = {
+        totalWorkforce: 128,
+        onLeaveToday: 6,
+        pendingApprovalCount: 4,
+
+        departmentDistribution: [
+            { department: 'Production',        count: 42 },
+            { department: 'Quality Control',    count: 18 },
+            { department: 'Human Resources',    count: 9  },
+            { department: 'Sales & Marketing',  count: 15 },
+            { department: 'Finance',            count: 11 },
+            { department: 'R&D',                count: 14 },
+            { department: 'Administration',     count: 19 }
+        ],
+
+        // Weekly + monthly attendance trend (Present / Absent counts)
+        attendanceWeek: {
+            labels:  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+            present: [118, 121, 115, 119, 122, 96, 40],
+            absent:  [10, 7, 13, 9, 6, 4, 2]
+        },
+        attendanceMonth: {
+            labels:  ['Week 1','Week 2','Week 3','Week 4'],
+            present: [580, 592, 575, 601],
+            absent:  [40, 28, 45, 19]
+        },
+
+        pendingApprovals: [
+            { type: 'leave',      id: 1, employeeName: 'Rohit Sharma',   subTitle: 'Casual Leave · 2 days',      icon: 'fa-umbrella-beach', redirectUrl: '/pages/leave.html' },
+            { type: 'expense',    id: 2, employeeName: 'Priya Patil',    subTitle: 'Travel Expense · ₹2,400',    icon: 'fa-money-bill',     redirectUrl: '/pages/expenses.html' },
+            { type: 'regularize', id: 3, employeeName: 'Amit Deshmukh',  subTitle: 'Attendance Correction',      icon: 'fa-clock',          redirectUrl: '/pages/attendance.html' },
+            { type: 'resignation',id: 4, employeeName: 'Sneha Kulkarni', subTitle: 'Resignation Request',        icon: 'fa-sign-out-alt',   redirectUrl: '/pages/resignation.html' }
+        ],
+
+        recentActivities: [
+            { icon: 'fa-user-check',    title: 'Attendance marked',       subTitle: 'Rohit Sharma checked in via biometric', timeAgo: '5 minutes ago',  redirectUrl: '/pages/attendance.html' },
+            { icon: 'fa-file-invoice-dollar', title: 'Payslip generated', subTitle: 'June 2026 payroll processed',           timeAgo: '1 hour ago',     redirectUrl: '/pages/payroll.html' },
+            { icon: 'fa-umbrella-beach', title: 'Leave approved',         subTitle: 'Sneha Kulkarni · Sick Leave',            timeAgo: '3 hours ago',    redirectUrl: '/pages/leave.html' },
+            { icon: 'fa-user-plus',      title: 'New employee onboarded', subTitle: 'Kiran Joshi joined Production',          timeAgo: '1 day ago',      redirectUrl: '/pages/profile.html' },
+            { icon: 'fa-money-bill',     title: 'Expense reimbursed',     subTitle: 'Amit Deshmukh · ₹1,200',                 timeAgo: '2 days ago',     redirectUrl: '/pages/expenses.html' }
+        ]
+    };
+
+    /* ============================================================
+       LOCAL "DATABASE" — read/write helpers (localStorage)
+       ============================================================ */
+    function loadState() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) return JSON.parse(raw);
+        } catch (e) { /* fall through to seed */ }
+        const fresh = JSON.parse(JSON.stringify(DASHBOARD_SEED));
+        saveState(fresh);
+        return fresh;
+    }
+
+    function saveState(state) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+        catch (e) { console.warn('Could not persist dashboard state:', e); }
+    }
+
+    let dashboardState = loadState();
+
+    /* ============================================================
+       INIT
+       ============================================================ */
     (function () {
         function onReady() {
             document.body.classList.add('components-loaded');
-            loadDashboard();
+            renderDashboard();
             initChartFilter();
             initRealTimeCounter();
             setActiveMenu('dashboard');
@@ -347,40 +427,48 @@
         setTimeout(onReady, 150);
     })();
 
-    // Also fire on DOMContentLoaded as a safety net
     document.addEventListener('DOMContentLoaded', function () {
         loadSidebar?.();
         loadHeader?.();
     });
 
-    // ── auto-refresh every 60 s (not 30 — DB round-trip is heavier than random()) ──
-    setInterval(loadDashboard, 60000);
-
-    // ============================================================
-    //  MAIN DATA LOADER
-    // ============================================================
-    async function loadDashboard(range) {
-        range = range || currentRange;
-        try {
-            const res = await fetch(`${API_BASE_DASHBOARD}?range=${range}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
-
-            renderStats(data.stats);
-            renderAttendanceChart(data.attendanceChart);
-            renderDepartmentChart(data.departmentDistribution);
-            renderPendingApprovals(data.pendingApprovals);
-            renderRecentActivities(data.recentActivities);
-
-        } catch (err) {
-            console.error('Dashboard load failed:', err);
-            showToast('Failed to load dashboard data. Retrying...', 'error');
-        }
+    /* ============================================================
+       MAIN RENDER — pulls everything from local state, no fetch()
+       ============================================================ */
+    function renderDashboard() {
+        const stats = computeStats();
+        renderStats(stats);
+        renderAttendanceChart(currentRange === 'month' ? dashboardState.attendanceMonth : dashboardState.attendanceWeek);
+        renderDepartmentChart(dashboardState.departmentDistribution);
+        renderPendingApprovals(dashboardState.pendingApprovals);
+        renderRecentActivities(dashboardState.recentActivities);
     }
 
-    // ============================================================
-    //  STATS CARDS
-    // ============================================================
+    // Auto-refresh the "live" bits every 60s using local data (no server round-trip)
+    setInterval(renderDashboard, 60000);
+
+    /* ============================================================
+       STATS — derived locally from state + today's attendance trend
+       ============================================================ */
+    function computeStats() {
+        const total = dashboardState.totalWorkforce;
+        const onLeave = dashboardState.onLeaveToday;
+
+        // "Present today" = last value of the week trend (today == last entry)
+        const weekPresent = dashboardState.attendanceWeek.present;
+        const presentToday = weekPresent[weekPresent.length - 1] ?? Math.round(total * 0.85);
+
+        const attendanceRate = total > 0 ? Math.round((presentToday / total) * 1000) / 10 : 0;
+
+        return {
+            totalWorkforce: total,
+            presentToday,
+            onLeave,
+            attendanceRate,
+            pendingApprovalCount: dashboardState.pendingApprovals.length
+        };
+    }
+
     function renderStats(stats) {
         if (!stats) return;
 
@@ -405,7 +493,6 @@
         const ctx = document.getElementById('attendanceChart').getContext('2d');
 
         if (attendanceChartInstance) {
-            // update existing instance — avoids canvas flicker
             attendanceChartInstance.data.labels = chartData.labels;
             attendanceChartInstance.data.datasets[0].data = chartData.present;
             attendanceChartInstance.data.datasets[1].data = chartData.absent;
@@ -510,7 +597,7 @@
     }
 
     // ============================================================
-    //  PENDING APPROVALS
+    //  PENDING APPROVALS  (state lives entirely in the browser)
     // ============================================================
     function renderPendingApprovals(approvals) {
         const container = document.getElementById('pendingApprovalsList');
@@ -588,67 +675,84 @@
     }
 
     // ============================================================
-    //  QUICK APPROVE (inline from dashboard widget)
+    //  QUICK APPROVE — purely local, no network call.
+    //  Removes the item from local state (persisted to localStorage)
+    //  and adds a matching entry to the recent-activity feed.
     // ============================================================
-    async function quickApprove(type, id) {
-        const actionBy = localStorage.getItem('hrms_firstName') + ' ' +
-                         localStorage.getItem('hrms_lastName') || 'HR Admin';
+    function quickApprove(type, id) {
+        const actionBy = (localStorage.getItem('hrms_firstName') || '') + ' ' +
+                         (localStorage.getItem('hrms_lastName')  || '');
+        const who = actionBy.trim() || 'HR Admin';
+
         const cardId = `approval-${type}-${id}`;
         const card   = document.getElementById(cardId);
         if (card) { card.style.opacity = '0.5'; card.style.pointerEvents = 'none'; }
 
-        try {
-            const res = await fetch(`${API_BASE_DASHBOARD}/approve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, id, actionBy })
-            });
-            const data = await res.json();
-
-            if (data.success) {
-                showToast(data.message || 'Approved successfully!', 'success');
-                if (card) {
-                    card.style.transition = 'opacity 0.4s, max-height 0.4s';
-                    card.style.maxHeight  = '0';
-                    card.style.overflow   = 'hidden';
-                    setTimeout(() => { card.remove(); updatePendingBadge(); }, 400);
-                }
-            } else {
-                showToast(data.message || 'Approval failed.', 'error');
+        // simulate a short processing delay for a natural feel — no server round trip
+        setTimeout(() => {
+            const idx = dashboardState.pendingApprovals.findIndex(a => a.type === type && a.id === id);
+            if (idx === -1) {
+                showToast('Item not found or already handled.', 'error');
                 if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
+                return;
             }
-        } catch (err) {
-            showToast('Network error. Please try again.', 'error');
-            if (card) { card.style.opacity = '1'; card.style.pointerEvents = 'auto'; }
-        }
+
+            const [approved] = dashboardState.pendingApprovals.splice(idx, 1);
+
+            // log it into recent activity so the change is visible immediately
+            dashboardState.recentActivities.unshift({
+                icon: 'fa-check-circle',
+                title: `${labelForType(type)} approved`,
+                subTitle: `${approved.employeeName} · by ${who}`,
+                timeAgo: 'just now',
+                redirectUrl: approved.redirectUrl
+            });
+
+            saveState(dashboardState);
+            showToast('Approved successfully!', 'success');
+
+            if (card) {
+                card.style.transition = 'opacity 0.4s, max-height 0.4s';
+                card.style.maxHeight  = '0';
+                card.style.overflow   = 'hidden';
+                setTimeout(() => {
+                    renderPendingApprovals(dashboardState.pendingApprovals);
+                    renderRecentActivities(dashboardState.recentActivities);
+                    renderStats(computeStats());
+                }, 400);
+            } else {
+                renderPendingApprovals(dashboardState.pendingApprovals);
+                renderRecentActivities(dashboardState.recentActivities);
+                renderStats(computeStats());
+            }
+        }, 350);
     }
 
-    function updatePendingBadge() {
-        const remaining = document.querySelectorAll('#pendingApprovalsList > div[id^="approval-"]').length;
-        const el = document.getElementById('pendingLeaves');
-        if (el) el.textContent = `${remaining} pending approval${remaining !== 1 ? 's' : ''}`;
+    function labelForType(type) {
+        const map = {
+            leave: 'Leave request',
+            expense: 'Expense claim',
+            regularize: 'Attendance correction',
+            resignation: 'Resignation request'
+        };
+        return map[type] || 'Request';
     }
 
     // ============================================================
-    //  CHART FILTER  (only calls chart endpoint — lighter)
+    //  CHART FILTER  — switches between local week/month datasets
     // ============================================================
     function initChartFilter() {
         const sel = document.getElementById('attendanceChartFilter');
         if (!sel) return;
-        sel.addEventListener('change', async function () {
+        sel.addEventListener('change', function () {
             currentRange = this.value;
-            try {
-                const res  = await fetch(`${API_BASE_DASHBOARD}/chart?range=${currentRange}`);
-                const data = await res.json();
-                renderAttendanceChart(data);
-            } catch (err) {
-                console.error('Chart filter fetch failed:', err);
-            }
+            const data = currentRange === 'month' ? dashboardState.attendanceMonth : dashboardState.attendanceWeek;
+            renderAttendanceChart(data);
         });
     }
 
     // ============================================================
-    //  REAL-TIME CHECK-IN COUNTER  (cosmetic — no API needed)
+    //  REAL-TIME CHECK-IN COUNTER  (cosmetic — purely client-side)
     // ============================================================
     function initRealTimeCounter() {
         let count = 24;
@@ -704,15 +808,5 @@
     }
     </script>
 
-    <script>
-    // Authentication Check
-    (function () {
-        const isLoggedIn = localStorage.getItem('hrms_logged_in');
-        if (isLoggedIn !== 'true') {
-            console.warn('Not logged in - redirecting to login');
-            window.location.href = 'index.html';
-        }
-    })();
-    </script>
 </body>
 </html>

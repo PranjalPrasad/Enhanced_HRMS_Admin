@@ -520,6 +520,38 @@
             box-shadow: 0 0 0 3px var(--color-secondary)/25% !important;
             outline: none !important;
         }
+
+        /* ============================== */
+        /* Overnight / OT-Eligibility / Regularization Feature Start — new badges */
+        /* ============================== */
+        .badge-ot-eligible-yes { background: rgba(27,115,140,0.12); color: var(--color-primary); border: 1px solid var(--color-primary); }
+        .badge-ot-eligible-no  { background: rgba(146,72,122,0.10); color: #92487A; border: 1px solid #92487A; }
+        .tag-overnight { background: rgba(89,25,107,0.10); color: #59196b; border: 1px solid #59196b; }
+        .badge-regularization-pending  { background: #916405; color: #eaf2ef; }
+        .badge-regularization-approved { background: #1e8e5c; color: #eaf2ef; }
+        .badge-regularization-rejected { background: #941010; color: #eaf2ef; }
+        .btn-regularization {
+            background-color: var(--color-secondary);
+            color: white; padding: 8px 16px; border-radius: 8px;
+            cursor: pointer; border: none; font-size: 13px; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            transition: background-color 0.2s ease, transform 0.15s ease; white-space: nowrap;
+        }
+        .btn-regularization:hover { background-color: var(--color-primary); transform: translateY(-1px); }
+        .btn-od-requests {
+            background-color: #186c83;
+            color: white; padding: 8px 16px; border-radius: 8px;
+            cursor: pointer; border: none; font-size: 13px; font-weight: 500;
+            display: flex; align-items: center; gap: 6px;
+            transition: background-color 0.2s ease, transform 0.15s ease; white-space: nowrap;
+        }
+        .btn-od-requests:hover { background-color: var(--color-primary); transform: translateY(-1px); }
+        .required-mark { color: #941010; }
+        .approval-trail { border: 1px dashed var(--color-border); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #555; margin-top: 4px; }
+        .approval-trail .trail-row { display:flex; justify-content:space-between; padding: 3px 0; }
+        /* ============================== */
+        /* Overnight / OT-Eligibility / Regularization Feature End */
+        /* ============================== */
     </style>
 </head>
 <body>
@@ -556,7 +588,7 @@
                             <h3 class="section-title">Daily Attendance</h3>
 
                             <!-- Biometric Feature Start — Sync button + Last Sync time -->
-                            <div style="display:flex; align-items:center; gap:14px;">
+                            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
                                 <span class="last-sync-label" id="lastSyncLabel">
                                     <i class="fas fa-clock"></i> Last Sync: <span id="lastSyncTimeValue">—</span>
                                 </span>
@@ -570,6 +602,18 @@
                                     <span>Shift Requests</span>
                                 </button>
                                 <!-- Shift Management Feature End -->
+                                <!-- Regularization Feature Start — open requests modal -->
+                                <button class="btn-regularization" id="openRegularizationBtn" onclick="openRegularizationModal()">
+                                    <i class="fas fa-file-signature"></i>
+                                    <span>Regularization Requests</span>
+                                </button>
+                                <!-- Regularization Feature End -->
+                                <!-- OD Feature Start — open requests modal -->
+                                <button class="btn-od-requests" id="openODRequestsBtn" onclick="openODRequestsModal()">
+                                    <i class="fas fa-briefcase"></i>
+                                    <span>OD Requests</span>
+                                </button>
+                                <!-- OD Feature End -->
                             </div>
                             <!-- Biometric Feature End -->
                         </div>
@@ -630,6 +674,10 @@
                                     <option value="Holiday">Holiday</option>
                                     <option value="OD">OD</option>
                                     <!-- Weekly Off / Comp Off Feature End -->
+                                    <!-- Extended Status Feature Start -->
+                                    <option value="Overtime">Overtime</option>
+                                    <option value="Weekly_Off_Present">Weekly Off (Worked)</option>
+                                    <!-- Extended Status Feature End -->
                                 </select>
                             </div>
 
@@ -753,18 +801,24 @@
                                         <!-- Shift Management Feature Start — new header -->
                                         <th>Shift</th>
                                         <!-- Shift Management Feature End -->
+                                        <!-- Overnight Feature Start -->
+                                        <th>Shift Date</th>
+                                        <!-- Overnight Feature End -->
                                         <!-- Overtime Feature Start — new headers -->
                                         <th>OT Hours</th>
                                         <th>Total Hours</th>
                                         <th>Overtime Status</th>
                                         <!-- Overtime Feature End -->
+                                        <!-- OT Eligibility Feature Start -->
+                                        <th>OT Eligibility</th>
+                                        <!-- OT Eligibility Feature End -->
                                         <th>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody id="dailyAttendanceList">
                                     <!-- Populated by JS -->
                                     <tr class="loading-row">
-                                        <td colspan="15"><span class="spinner"></span> Loading attendance data…</td>
+                                        <td colspan="17"><span class="spinner"></span> Loading attendance data…</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -879,14 +933,14 @@
         </div>
     </div>
 
-    <!-- ===== EDIT ATTENDANCE MODAL ===== -->
-    <!-- Edit Attendance Modal -->
+    <!-- ===== EDIT ATTENDANCE / REGULARIZATION MODAL ===== -->
+    <!-- Attendance Regularization Modal (was: freely-editable Edit Attendance modal) -->
 <div id="editAttendanceModal" class="modal">
     <div class="modal-content">
         
         <!-- Modal Header -->
         <div class="modal-header">
-            <h3 class="text-lg font-semibold text-[var(--color-primary)]">Edit Attendance</h3>
+            <h3 class="text-lg font-semibold text-[var(--color-primary)]">Attendance Regularization</h3>
             <button 
                 class="modal-close text-2xl leading-none hover:text-[var(--color-bg)] transition-colors" 
                 onclick="closeModal('editAttendanceModal')" 
@@ -894,6 +948,11 @@
                 &times;
             </button>
         </div>
+
+        <p style="font-size:11px; color:var(--color-secondary); margin:-8px 0 14px;">
+            <i class="fas fa-fingerprint"></i> Biometric data is the authoritative source and cannot be overwritten directly.
+            Submitting this form raises a <strong>Regularization / Correction request</strong> that must be approved.
+        </p>
 
         <form id="editAttendanceForm">
             <input type="hidden" id="edit_attendance_id">
@@ -942,9 +1001,9 @@
                 <i class="fas fa-fingerprint"></i> Check-in/out times are captured only via biometric sync and cannot be edited manually.
             </p>
 
-            <!-- Status -->
+            <!-- Requested Status -->
             <div class="form-group mb-4">
-                <label class="text-xs font-semibold text-[var(--color-primary)]">Status</label>
+                <label class="text-xs font-semibold text-[var(--color-primary)]">Requested Status</label>
                 <select 
                     id="edit_status"
                     class="px-4 py-2 border border-[var(--color-border)] rounded-md 
@@ -963,20 +1022,31 @@
                     <option value="Holiday">Holiday</option>
                     <option value="OD">OD</option>
                     <!-- Weekly Off / Comp Off Feature End -->
+                    <!-- Extended Status Feature Start -->
+                    <option value="Overtime">Overtime</option>
+                    <option value="Weekly_Off_Present">Weekly Off (Worked)</option>
+                    <!-- Extended Status Feature End -->
                 </select>
             </div>
 
-            <!-- Notes -->
+            <!-- Reason / Remarks — MANDATORY for regularization -->
             <div class="form-group mb-5">
-                <label class="text-xs font-semibold text-[var(--color-primary)]">Notes</label>
+                <label class="text-xs font-semibold text-[var(--color-primary)]">Reason / Remarks <span class="required-mark">*</span></label>
                 <textarea 
                     id="edit_notes" 
                     rows="3" 
-                    placeholder="Optional notes…"
+                    required
+                    placeholder="Mandatory — explain why this correction is being requested…"
                     class="px-4 py-2 border border-[var(--color-border)] rounded-md 
                            focus:outline-none focus:border-[var(--color-secondary)] 
                            focus:ring-1 focus:ring-[var(--color-secondary)]/25 
                            text-sm bg-white w-full resize-y"></textarea>
+            </div>
+
+            <!-- Existing approval trail for this record, if any -->
+            <div id="edit_approval_trail_wrap" style="display:none;" class="mb-4">
+                <label class="text-xs font-semibold text-[var(--color-primary)]">Previous Requests</label>
+                <div class="approval-trail" id="edit_approval_trail"></div>
             </div>
 
             <!-- Action Buttons -->
@@ -991,7 +1061,7 @@
                     type="submit" 
                     class="btn-primary px-6 py-2 text-sm font-medium rounded-md" 
                     id="editSubmitBtn">
-                    Update
+                    Submit for Approval
                 </button>
             </div>
         </form>
@@ -1189,6 +1259,101 @@
     </div>
     <!-- Shift Management Feature End -->
 
+    <!-- Regularization Feature Start — Regularization Requests Modal -->
+    <div id="regularizationModal" class="modal">
+        <div class="modal-content modal-lg" style="max-width:960px;">
+            <div class="modal-header">
+                <div>
+                    <h3>Attendance Regularization Requests</h3>
+                    <p style="font-size:11px; color:var(--color-secondary); margin-top:2px;">Review and approve/reject correction requests raised against biometric records</p>
+                </div>
+                <button class="modal-close" onclick="closeModal('regularizationModal')" aria-label="Close">&times;</button>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Date</th>
+                            <th>Current Status</th>
+                            <th>Requested Status</th>
+                            <th>Reason / Remarks</th>
+                            <th>Requested On</th>
+                            <th>Approval Status</th>
+                            <th>Approved By</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="regularizationList">
+                        <tr class="loading-row">
+                            <td colspan="9"><span class="spinner"></span> Loading regularization requests…</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- Regularization Feature End -->
+
+    <!-- OD Feature Start — OD Apply / Approve Modal -->
+    <div id="odRequestsModal" class="modal">
+        <div class="modal-content modal-lg" style="max-width:960px;">
+            <div class="modal-header">
+                <div>
+                    <h3>OD (On Duty) Requests</h3>
+                    <p style="font-size:11px; color:var(--color-secondary); margin-top:2px;">Apply OD on behalf of an employee, and approve/reject pending requests</p>
+                </div>
+                <button class="modal-close" onclick="closeModal('odRequestsModal')" aria-label="Close">&times;</button>
+            </div>
+
+            <!-- Apply OD form -->
+            <form id="applyODForm" style="border:1px solid var(--color-border); border-radius:10px; padding:14px; margin-bottom:16px;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Employee</label>
+                        <select id="od_employee_select" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input type="date" id="od_date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Reason <span class="required-mark">*</span></label>
+                        <input type="text" id="od_reason" required placeholder="Client visit, site work…">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary px-5 py-2 text-sm">
+                        <i class="fas fa-plus"></i> Apply OD
+                    </button>
+                </div>
+            </form>
+
+            <div class="overflow-x-auto">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Employee</th>
+                            <th>Date</th>
+                            <th>Reason</th>
+                            <th>Applied On</th>
+                            <th>Approval Status</th>
+                            <th>Approved By</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="odRequestsList">
+                        <tr class="loading-row">
+                            <td colspan="7"><span class="spinner"></span> Loading OD requests…</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <!-- OD Feature End -->
+
     <script src="/assets/js/component-loader.js"></script>  <!-- ← ADD THIS LINE -->
 
     <script src="/assets/js/component-loader.js"></script>  <!-- ← ADD THIS LINE -->
@@ -1230,10 +1395,33 @@
         // ==============================
 
         // ==============================
+        // Regularization Feature Start — new endpoints
+        // ==============================
+        REGULARIZATION_LIST:    '/api/attendance/regularization/requests',                 // GET
+        REGULARIZATION_CREATE:  '/api/attendance/regularization/requests',                 // POST
+        REGULARIZATION_APPROVE: (id) => `/api/attendance/regularization/requests/${id}/approve`, // POST
+        REGULARIZATION_REJECT:  (id) => `/api/attendance/regularization/requests/${id}/reject`,  // POST
+        // ==============================
+        // Regularization Feature End
+        // ==============================
+
+        // ==============================
+        // OD Feature Start — new endpoints
+        // ==============================
+        OD_LIST:    '/api/attendance/od/requests',                 // GET
+        OD_CREATE:  '/api/attendance/od/requests',                 // POST
+        OD_APPROVE: (id) => `/api/attendance/od/requests/${id}/approve`, // POST
+        OD_REJECT:  (id) => `/api/attendance/od/requests/${id}/reject`,  // POST
+        // ==============================
+        // OD Feature End
+        // ==============================
+
+        // ==============================
         // Overtime Feature Start
         // No new endpoint required — otHours, totalHours, overtimeStatus
         // are already present on each attendance record returned by
-        // ATTENDANCE_BY_EMP (backend already calculates OT).
+        // ATTENDANCE_BY_EMP (backend already calculates OT, including
+        // overnight-shift splitting — see OVERNIGHT feature below).
         // If you later expose a dedicated OT report endpoint, wire it here:
         // OT_REPORT: '/api/attendance/overtime/report',   // GET ?from=&to=
         // ==============================
@@ -1309,6 +1497,24 @@
         // ==============================
 
         // ==============================
+        // Regularization Feature Start
+        // ==============================
+        regularizationRequests: [],
+        regularizationActionInProgress: null,
+        // ==============================
+        // Regularization Feature End
+        // ==============================
+
+        // ==============================
+        // OD Feature Start
+        // ==============================
+        odRequests: [],
+        odActionInProgress: null,
+        // ==============================
+        // OD Feature End
+        // ==============================
+
+        // ==============================
         // Punch Logs Feature Start
         // ==============================
         summaryPunchLogs: [],       // cached punch logs for current summary employee + range
@@ -1369,6 +1575,10 @@
             'holiday':    'badge-holiday2',
             'od':         'badge-od',
             // Weekly Off / Comp Off Feature End
+            // Extended Status Feature Start
+            'overtime':          'badge-ot-approved',
+            'weekly_off_present':'badge-weeklyoff',
+            // Extended Status Feature End
         };
         const key = status.toLowerCase().replace(' ', '_');
         const cls = map[key] || 'badge-notmarked';
@@ -1437,8 +1647,11 @@
         if (!shift) return '<span class="badge badge-notmarked">—</span>';
         const key = shift.toLowerCase().replace(/\s+/g, '').replace('_', '');
         const map = {
+            '1stshift':   'badge-shift-morning',
             morning:      'badge-shift-morning',
+            '2ndshift':   'badge-shift-general',
             general:      'badge-shift-general',
+            '3rdshift':   'badge-shift-night',
             evening:      'badge-shift-evening',
             night:        'badge-shift-night',
             crossshift:   'badge-shift-crossshift',
@@ -1494,6 +1707,37 @@
     // Overtime Feature End
     // ==============================
 
+    // ==============================
+    // OT Eligibility Feature Start — helpers
+    // Designation → OT eligibility rule (from employee master):
+    //   Below "Assistant Manager" in the org ladder => OT eligible (can earn paid OT)
+    //   "Assistant Manager" and above                => NOT OT eligible, Comp-Off only
+    // ==============================
+    const DESIGNATION_LADDER = [
+        'Trainee', 'Associate', 'Sr. Associate', 'Executive', 'Sr. Executive',
+        'Team Lead', 'Assistant Manager', 'Manager', 'Sr. Manager', 'AVP', 'VP'
+    ];
+    const OT_CUTOFF_INDEX = DESIGNATION_LADDER.indexOf('Assistant Manager'); // rank at/above this => not OT eligible
+
+    function isOtEligibleDesignation(designation) {
+        const idx = DESIGNATION_LADDER.indexOf(designation);
+        if (idx === -1) return true; // unknown designation — default to eligible
+        return idx < OT_CUTOFF_INDEX;
+    }
+
+    /** Badge HTML for OT Eligibility column — driven by employee master designation */
+    function otEligibilityBadge(rec) {
+        const emp = state.allEmployees.find(e => e.employeePrimeId === rec.employeePrimeId);
+        const designation = emp?.designation || rec.designation || '—';
+        const eligible = isOtEligibleDesignation(designation);
+        const cls   = eligible ? 'badge-ot-eligible-yes' : 'badge-ot-eligible-no';
+        const label = eligible ? 'OT Eligible' : 'C-Off Only';
+        return `<span class="badge ${cls}" title="${escapeAttr(designation)}">${label}</span>`;
+    }
+    // ==============================
+    // OT Eligibility Feature End
+    // ==============================
+
 // ==============================
     // Weekly Off / Comp Off Feature Start — helpers
     // ==============================
@@ -1508,7 +1752,7 @@
      */
     function workedOnWeeklyOffTag(rec) {
         const status = (rec.status || '').toLowerCase().replace(' ', '_');
-        const isWeeklyOff = status === 'weekly_off' || status === 'weeklyoff';
+        const isWeeklyOff = status === 'weekly_off' || status === 'weeklyoff' || status === 'weekly_off_present';
         if (!isWeeklyOff) return '';
 
         const actuallyWorked = rec.workedOnWeeklyOff === true || !!rec.checkInTime;
@@ -1529,6 +1773,19 @@
 
     // ==============================
     // Biometric Feature End
+    // ==============================
+
+    // ==============================
+    // Overnight Shift Feature Start — helpers
+    // ==============================
+
+    /** Small "Overnight" tag shown next to Shift Date when a punch crossed midnight */
+    function overnightTag(rec) {
+        if (!rec.overnightCross) return '';
+        return `<span class="tag-worked-flag tag-overnight" title="Check-out crossed midnight; hours split between Present and Overtime for this shift-date"><i class="fas fa-moon"></i> Overnight</span>`;
+    }
+    // ==============================
+    // Overnight Shift Feature End
     // ==============================
 
     /** Show toast notification */
@@ -1579,13 +1836,19 @@
     const MOCK_DEPARTMENTS = ['Human Resources','Information Technology','Sales','Finance','Operations','Marketing','Legal','Administration'];
     const MOCK_FIRST_NAMES = ['Aarav','Vivaan','Aditya','Ishaan','Kabir','Rohan','Aryan','Dev','Sai','Arjun','Ananya','Diya','Ishita','Kavya','Meera','Priya','Riya','Sanya','Tara','Zoya'];
     const MOCK_LAST_NAMES  = ['Sharma','Verma','Gupta','Iyer','Nair','Khan','Reddy','Mehta','Joshi','Kapoor','Singh','Patel','Rao','Chopra','Malhotra'];
-    const MOCK_SHIFTS      = ['Morning','General','Evening','Night'];
+    // Shift Management Feature — renamed to numbered shifts per Admin requirement;
+    // "Cross Shift" is still used internally to flag shifts that straddle midnight.
+    const MOCK_SHIFTS      = ['1st Shift', '2nd Shift', '3rd Shift'];
     const MOCK_DEVICES     = ['Main Gate Biometric','HR Office Terminal','Floor 2 Scanner','Warehouse Entry Device'];
+    // OT Eligibility Feature — designations assigned to mock employees
+    const MOCK_DESIGNATIONS = ['Trainee','Associate','Sr. Associate','Executive','Sr. Executive','Team Lead','Assistant Manager','Manager','Sr. Manager'];
 
     const mockDB = {
         employees: [],
         attendanceByEmp: {},
         shiftRequests: [],
+        regularizationRequests: [],  // Regularization Feature
+        odRequests: [],              // OD Feature
         initialized: false,
     };
 
@@ -1595,6 +1858,13 @@
     function randChoice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
     function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
     function pad2(n) { return String(n).padStart(2, '0'); }
+
+    /** Add `days` days to a "YYYY-MM-DD" string, returns "YYYY-MM-DD" */
+    function addDaysISO(dateStr, days) {
+        const d = new Date(dateStr + 'T00:00:00');
+        d.setDate(d.getDate() + days);
+        return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+    }
 
     function initMockData() {
         if (mockDB.initialized) return;
@@ -1615,14 +1885,22 @@
                 pfNumber: `PF${String(500000 + i)}`,
                 uanNumber: `UAN${String(900000 + i)}`,
                 esicNumber: `ESIC${String(300000 + i)}`,
+                // OT Eligibility Feature Start — designation comes from employee master
+                designation: MOCK_DESIGNATIONS[i % MOCK_DESIGNATIONS.length],
+                // OT Eligibility Feature End
             });
         }
+        // Ensure OT eligibility flag is derivable right away
+        mockDB.employees.forEach(e => { e.otEligible = isOtEligibleDesignation(e.designation); });
 
         // ---- Attendance (last 60 days) — BIOMETRIC ONLY (manual source removed) ----
         const today = new Date();
         mockDB.employees.forEach(emp => {
             const records = [];
             let attId = emp.employeePrimeId * 1000;
+            // Assign each employee a default shift (used to detect overnight/3rd-shift crossing)
+            const empShift = randChoice(MOCK_SHIFTS);
+
             for (let d = 59; d >= 0; d--) {
                 const date = new Date(today);
                 date.setDate(today.getDate() - d);
@@ -1630,11 +1908,13 @@
                 const dow = date.getDay(); // 0 Sun .. 6 Sat
 
                 let status, checkIn = null, checkOut = null, totalHours = null,
-                    otHours = 0, overtimeStatus = null, workedOnWeeklyOff = false, weeklyOffTreatment = null;
+                    otHours = 0, overtimeStatus = null, workedOnWeeklyOff = false, weeklyOffTreatment = null,
+                    overnightCross = false, checkOutDateOffset = 0;
 
                 if (dow === 0) {
                     status = 'Weekly_Off';
                     if (Math.random() < 0.15) {
+                        status = 'Weekly_Off_Present';
                         workedOnWeeklyOff = true;
                         checkIn = '10:00:00'; checkOut = '16:00:00'; totalHours = 6;
                         weeklyOffTreatment = Math.random() < 0.5 ? 'COMP_OFF' : 'OT_ELIGIBLE';
@@ -1652,21 +1932,56 @@
                     else status = 'Not_Marked';
 
                     if (['Present','Late','Half_Day'].includes(status)) {
-                        const inHour = status === 'Late' ? randInt(10, 11) : randInt(9, 10);
-                        const inMin  = randInt(0, 59);
-                        checkIn = `${pad2(inHour)}:${pad2(inMin)}:00`;
-                        if (status === 'Half_Day') {
-                            checkOut = `${pad2(inHour + 4)}:${pad2(inMin)}:00`;
-                            totalHours = 4;
-                        } else {
-                            const outHour = randInt(18, 20);
+                        // ==============================
+                        // Overnight Shift Feature Start
+                        // For 3rd Shift employees, check-in is in the evening and
+                        // check-out crosses midnight into the next calendar date.
+                        // The shift-date (attendanceDate) stays as the check-in date;
+                        // the raw checkout timestamp is on dateStr+1. Backend would
+                        // reconcile the biometric punch pair using shift start/end
+                        // windows — this mock reproduces that same split.
+                        // ==============================
+                        if (empShift === '3rd Shift') {
+                            const inHour = status === 'Late' ? randInt(23, 23) : randInt(21, 22);
+                            const inMin  = randInt(0, 59);
+                            checkIn = `${pad2(inHour)}:${pad2(inMin)}:00`;
+
+                            // checkout crosses midnight — hours after 00:00 belong to next date
+                            const outHour = randInt(6, 8); // next-day morning
                             checkOut = `${pad2(outHour)}:${pad2(inMin)}:00`;
-                            totalHours = parseFloat((outHour - inHour).toFixed(1));
-                            if (outHour >= 19) {
-                                otHours = parseFloat((outHour - 18).toFixed(1));
-                                overtimeStatus = randChoice(['OT_Approved','OT_Pending','OT_Rejected']);
+                            overnightCross = true;
+                            checkOutDateOffset = 1;
+
+                            const hoursBeforeMidnight = (24 - inHour) + (inMin > 0 ? -inMin/60 : 0);
+                            const hoursAfterMidnight  = outHour + inMin/60;
+                            totalHours = parseFloat((hoursBeforeMidnight + hoursAfterMidnight).toFixed(1));
+
+                            // Standard shift = 8 hrs; anything beyond is Overtime, attributed
+                            // to the shift-date (the date the employee clocked IN on).
+                            if (totalHours > 8) {
+                                otHours = parseFloat((totalHours - 8).toFixed(1));
+                                overtimeStatus = randChoice(['OT_Approved','OT_Pending']);
+                            }
+                        } else {
+                            const inHour = status === 'Late' ? randInt(10, 11) : randInt(9, 10);
+                            const inMin  = randInt(0, 59);
+                            checkIn = `${pad2(inHour)}:${pad2(inMin)}:00`;
+                            if (status === 'Half_Day') {
+                                checkOut = `${pad2(inHour + 4)}:${pad2(inMin)}:00`;
+                                totalHours = 4;
+                            } else {
+                                const outHour = randInt(18, 20);
+                                checkOut = `${pad2(outHour)}:${pad2(inMin)}:00`;
+                                totalHours = parseFloat((outHour - inHour).toFixed(1));
+                                if (outHour >= 19) {
+                                    otHours = parseFloat((outHour - 18).toFixed(1));
+                                    overtimeStatus = randChoice(['OT_Approved','OT_Pending','OT_Rejected']);
+                                }
                             }
                         }
+                        // ==============================
+                        // Overnight Shift Feature End
+                        // ==============================
                     }
                 }
 
@@ -1680,16 +1995,19 @@
                 records.push({
                     attendanceId: attId++,
                     employeePrimeId: emp.employeePrimeId,
-                    attendanceDate: dateStr,
+                    attendanceDate: dateStr,               // shift-date: date the employee clocked IN on
                     checkInTime: checkIn,
                     checkOutTime: checkOut,
+                    // Overnight Shift Feature — raw checkout calendar date, for audit/punch-log display
+                    checkOutDate: checkOutDateOffset ? addDaysISO(dateStr, checkOutDateOffset) : dateStr,
+                    overnightCross: overnightCross,
                     totalHours: totalHours,
                     status: status,
                     notes: status === 'Leave' ? 'Approved leave' : (status === 'OD' ? 'On official duty' : ''),
                     attendanceSource: source,
                     deviceName: deviceName,
                     biometricStatus: biometricStatus,
-                    shift: randChoice(MOCK_SHIFTS),
+                    shift: empShift,
                     otHours: otHours,
                     overtimeStatus: overtimeStatus,
                     workedOnWeeklyOff: workedOnWeeklyOff,
@@ -1718,6 +2036,47 @@
             }
         });
 
+        // ---- Regularization Requests (Feature Start) — a few seeded sample requests ----
+        let regId = 1;
+        mockDB.employees.slice(0, 5).forEach(emp => {
+            const recs = mockDB.attendanceByEmp[emp.employeePrimeId] || [];
+            const target = recs[randInt(0, Math.min(9, recs.length - 1))];
+            if (target) {
+                mockDB.regularizationRequests.push({
+                    regularizationId: regId++,
+                    employeePrimeId: emp.employeePrimeId,
+                    employeeId: emp.employeeId,
+                    employeeName: `${emp.firstName} ${emp.lastName}`,
+                    attendanceId: target.attendanceId,
+                    attendanceDate: target.attendanceDate,
+                    currentStatus: target.status,
+                    requestedStatus: randChoice(['Present','Half_Day','Leave','OD']),
+                    reason: randChoice(['Biometric device malfunction at gate','Forgot to punch out — worked till EOD','Field visit, punched at client site','System sync delay']),
+                    requestedOn: todayISO(),
+                    approvalStatus: randChoice(['Pending','Pending','Approved','Rejected']),
+                    approvedBy: Math.random() < 0.5 ? 'HR Admin' : null,
+                });
+            }
+        });
+        // ---- Regularization Requests (Feature End) ----
+
+        // ---- OD Requests (Feature Start) — seed a few sample requests ----
+        let odId = 1;
+        mockDB.employees.slice(0, 4).forEach(emp => {
+            mockDB.odRequests.push({
+                odId: odId++,
+                employeePrimeId: emp.employeePrimeId,
+                employeeId: emp.employeeId,
+                employeeName: `${emp.firstName} ${emp.lastName}`,
+                odDate: `${today.getFullYear()}-${pad2(today.getMonth()+1)}-${pad2(randInt(1,28))}`,
+                reason: randChoice(['Client site visit','Vendor meeting','Field survey','Training at partner office']),
+                appliedOn: todayISO(),
+                approvalStatus: randChoice(['Pending','Approved']),
+                approvedBy: Math.random() < 0.5 ? 'HR Admin' : null,
+            });
+        });
+        // ---- OD Requests (Feature End) ----
+
         mockDB.initialized = true;
     }
 
@@ -1736,8 +2095,11 @@
                 });
             }
             if (r.checkOutTime) {
+                // Overnight Shift Feature — punch-out log uses the RAW calendar date/time
+                // (which may be the next day), while the attendance record itself keeps
+                // the shift-date as the check-in date.
                 logs.push({
-                    punchTime: `${r.attendanceDate}T${r.checkOutTime}`,
+                    punchTime: `${r.checkOutDate || r.attendanceDate}T${r.checkOutTime}`,
                     punchType: 'OUT',
                     deviceName: r.deviceName || 'Main Gate Biometric',
                     attendanceSource: r.attendanceSource || 'Biometric',
@@ -1999,6 +2361,301 @@
     // Shift Management Feature End
     // ==============================
 
+    // ==============================
+    // Regularization Feature Start — Attendance Regularization / Correction workflow
+    // Replaces the old "free edit" of check-in/out. Admin/employee raises a
+    // correction request with mandatory reason; a separate approver actions it.
+    // Approving a request updates the underlying attendance record's status/notes;
+    // rejecting leaves the biometric record untouched.
+    // ==============================
+
+    async function fetchRegularizationRequests() {
+        initMockData();
+        await mockDelay(300);
+        return mockDB.regularizationRequests;
+    }
+
+    async function createRegularizationRequest(payload) {
+        initMockData();
+        await mockDelay(300);
+        const req = {
+            regularizationId: mockDB.regularizationRequests.length
+                ? Math.max(...mockDB.regularizationRequests.map(r => r.regularizationId)) + 1
+                : 1,
+            ...payload,
+            requestedOn: todayISO(),
+            approvalStatus: 'Pending',
+            approvedBy: null,
+        };
+        mockDB.regularizationRequests.unshift(req);
+        return req;
+    }
+
+    async function approveRegularizationRequest(id) {
+        await mockDelay(400);
+        const req = mockDB.regularizationRequests.find(r => r.regularizationId === id);
+        if (req) {
+            req.approvalStatus = 'Approved';
+            req.approvedBy = 'HR Admin';
+            // Apply the requested status/notes to the underlying attendance record
+            const records = mockDB.attendanceByEmp[req.employeePrimeId] || [];
+            const target = records.find(r => r.attendanceId === req.attendanceId);
+            if (target) {
+                target.status = req.requestedStatus;
+                target.notes  = req.reason;
+                target.regularized = true;
+            }
+        }
+        return { success: true };
+    }
+
+    async function rejectRegularizationRequest(id) {
+        await mockDelay(400);
+        const req = mockDB.regularizationRequests.find(r => r.regularizationId === id);
+        if (req) {
+            req.approvalStatus = 'Rejected';
+            req.approvedBy = 'HR Admin';
+        }
+        return { success: true };
+    }
+
+    async function openRegularizationModal() {
+        document.getElementById('regularizationModal').classList.add('active');
+        await loadRegularizationRequests();
+    }
+
+    async function loadRegularizationRequests() {
+        const tbody = document.getElementById('regularizationList');
+        tbody.innerHTML = `<tr class="loading-row"><td colspan="9"><span class="spinner"></span> Loading regularization requests…</td></tr>`;
+        try {
+            state.regularizationRequests = await fetchRegularizationRequests();
+            renderRegularizationTable();
+        } catch (err) {
+            console.error('[Regularization] Load failed:', err);
+            tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-plug"></i><p>Failed to load regularization requests.</p></div></td></tr>`;
+        }
+    }
+
+    function renderRegularizationTable() {
+        const tbody = document.getElementById('regularizationList');
+        const records = state.regularizationRequests;
+
+        if (!records || records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><i class="fas fa-file-signature"></i><p>No regularization requests found.</p></div></td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = records.map(req => {
+            const isPending = (req.approvalStatus || 'Pending').toLowerCase() === 'pending';
+            const busy = state.regularizationActionInProgress === req.regularizationId;
+            return `
+            <tr>
+                <td>
+                    <div class="emp-name">${escapeHtml(req.employeeName || '')}</div>
+                    <div class="emp-id">${escapeHtml(req.employeeId || '')}</div>
+                </td>
+                <td>${formatDate(req.attendanceDate)}</td>
+                <td>${statusBadge(req.currentStatus)}</td>
+                <td>${statusBadge(req.requestedStatus)}</td>
+                <td style="max-width:220px; color:#555; font-size:12px;">${escapeHtml(req.reason || '—')}</td>
+                <td>${formatDate(req.requestedOn)}</td>
+                <td>${approvalStatusBadge(req.approvalStatus)}</td>
+                <td>${escapeHtml(req.approvedBy || '—')}</td>
+                <td style="white-space:nowrap;">
+                    ${isPending ? `
+                        <button class="btn-action-approve" ${busy ? 'disabled' : ''} onclick="handleRegularizationAction(${req.regularizationId}, 'approve')">${busy ? 'Working…' : 'Approve'}</button>
+                        <button class="btn-action-reject" ${busy ? 'disabled' : ''} onclick="handleRegularizationAction(${req.regularizationId}, 'reject')">${busy ? 'Working…' : 'Reject'}</button>
+                    ` : `<span style="font-size:11px; color:var(--color-secondary);">—</span>`}
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function handleRegularizationAction(id, action) {
+        if (state.regularizationActionInProgress) return;
+        state.regularizationActionInProgress = id;
+        renderRegularizationTable();
+        try {
+            if (action === 'approve') {
+                await approveRegularizationRequest(id);
+                showToast('Regularization request approved — attendance record updated.', 'success');
+            } else {
+                await rejectRegularizationRequest(id);
+                showToast('Regularization request rejected.', 'info');
+            }
+            await loadRegularizationRequests();
+            await loadAllAttendanceData();
+        } catch (err) {
+            console.error('[Regularization Action]', err);
+            showToast(`Action failed: ${err.message}`, 'error');
+        } finally {
+            state.regularizationActionInProgress = null;
+        }
+    }
+    // ==============================
+    // Regularization Feature End
+    // ==============================
+
+    // ==============================
+    // OD Feature Start — Apply / Approve On-Duty requests
+    // ==============================
+
+    async function fetchODRequests() {
+        initMockData();
+        await mockDelay(300);
+        return mockDB.odRequests;
+    }
+
+    async function createODRequest(payload) {
+        initMockData();
+        await mockDelay(300);
+        const req = {
+            odId: mockDB.odRequests.length ? Math.max(...mockDB.odRequests.map(r => r.odId)) + 1 : 1,
+            ...payload,
+            appliedOn: todayISO(),
+            approvalStatus: 'Pending',
+            approvedBy: null,
+        };
+        mockDB.odRequests.unshift(req);
+        return req;
+    }
+
+    async function approveODRequest(id) {
+        await mockDelay(400);
+        const req = mockDB.odRequests.find(r => r.odId === id);
+        if (req) {
+            req.approvalStatus = 'Approved';
+            req.approvedBy = 'HR Admin';
+            // Mark the attendance record for that date as OD
+            const records = mockDB.attendanceByEmp[req.employeePrimeId] || [];
+            const target = records.find(r => r.attendanceDate === req.odDate);
+            if (target) {
+                target.status = 'OD';
+                target.notes  = req.reason;
+            }
+        }
+        return { success: true };
+    }
+
+    async function rejectODRequest(id) {
+        await mockDelay(400);
+        const req = mockDB.odRequests.find(r => r.odId === id);
+        if (req) {
+            req.approvalStatus = 'Rejected';
+            req.approvedBy = 'HR Admin';
+        }
+        return { success: true };
+    }
+
+    async function openODRequestsModal() {
+        document.getElementById('odRequestsModal').classList.add('active');
+
+        // Populate employee dropdown for Apply OD form
+        const sel = document.getElementById('od_employee_select');
+        if (state.allEmployees.length && sel.options.length === 0) {
+            sel.innerHTML = state.allEmployees.map(e =>
+                `<option value="${e.employeePrimeId}">${escapeHtml(e.firstName + ' ' + e.lastName)} (${escapeHtml(e.employeeId)})</option>`
+            ).join('');
+        }
+        document.getElementById('od_date').value = todayISO();
+
+        await loadODRequests();
+    }
+
+    async function loadODRequests() {
+        const tbody = document.getElementById('odRequestsList');
+        tbody.innerHTML = `<tr class="loading-row"><td colspan="7"><span class="spinner"></span> Loading OD requests…</td></tr>`;
+        try {
+            state.odRequests = await fetchODRequests();
+            renderODRequestsTable();
+        } catch (err) {
+            console.error('[OD] Load failed:', err);
+            tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-plug"></i><p>Failed to load OD requests.</p></div></td></tr>`;
+        }
+    }
+
+    function renderODRequestsTable() {
+        const tbody = document.getElementById('odRequestsList');
+        const records = state.odRequests;
+        if (!records || records.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="fas fa-briefcase"></i><p>No OD requests found.</p></div></td></tr>`;
+            return;
+        }
+        tbody.innerHTML = records.map(req => {
+            const isPending = (req.approvalStatus || 'Pending').toLowerCase() === 'pending';
+            const busy = state.odActionInProgress === req.odId;
+            return `
+            <tr>
+                <td>
+                    <div class="emp-name">${escapeHtml(req.employeeName || '')}</div>
+                    <div class="emp-id">${escapeHtml(req.employeeId || '')}</div>
+                </td>
+                <td>${formatDate(req.odDate)}</td>
+                <td style="max-width:220px; color:#555; font-size:12px;">${escapeHtml(req.reason || '—')}</td>
+                <td>${formatDate(req.appliedOn)}</td>
+                <td>${approvalStatusBadge(req.approvalStatus)}</td>
+                <td>${escapeHtml(req.approvedBy || '—')}</td>
+                <td style="white-space:nowrap;">
+                    ${isPending ? `
+                        <button class="btn-action-approve" ${busy ? 'disabled' : ''} onclick="handleODAction(${req.odId}, 'approve')">${busy ? 'Working…' : 'Approve'}</button>
+                        <button class="btn-action-reject" ${busy ? 'disabled' : ''} onclick="handleODAction(${req.odId}, 'reject')">${busy ? 'Working…' : 'Reject'}</button>
+                    ` : `<span style="font-size:11px; color:var(--color-secondary);">—</span>`}
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function handleODAction(id, action) {
+        if (state.odActionInProgress) return;
+        state.odActionInProgress = id;
+        renderODRequestsTable();
+        try {
+            if (action === 'approve') {
+                await approveODRequest(id);
+                showToast('OD request approved.', 'success');
+            } else {
+                await rejectODRequest(id);
+                showToast('OD request rejected.', 'info');
+            }
+            await loadODRequests();
+            await loadAllAttendanceData();
+        } catch (err) {
+            console.error('[OD Action]', err);
+            showToast(`Action failed: ${err.message}`, 'error');
+        } finally {
+            state.odActionInProgress = null;
+        }
+    }
+
+    document.getElementById('applyODForm')?.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const empPrimeId = parseInt(document.getElementById('od_employee_select').value, 10);
+        const emp = state.allEmployees.find(e2 => e2.employeePrimeId === empPrimeId);
+        if (!emp) { showToast('Select an employee', 'error'); return; }
+
+        const payload = {
+            employeePrimeId: empPrimeId,
+            employeeId: emp.employeeId,
+            employeeName: `${emp.firstName} ${emp.lastName}`,
+            odDate: document.getElementById('od_date').value,
+            reason: document.getElementById('od_reason').value.trim(),
+        };
+        if (!payload.reason) { showToast('Reason is required', 'warning'); return; }
+
+        try {
+            await createODRequest(payload);
+            showToast('OD request submitted for approval.', 'success');
+            document.getElementById('applyODForm').reset();
+            document.getElementById('od_date').value = todayISO();
+            await loadODRequests();
+        } catch (err) {
+            showToast(`Failed to submit OD request: ${err.message}`, 'error');
+        }
+    });
+    // ==============================
+    // OD Feature End
+    // ==============================
+
     /* =======================================================================
        DEPARTMENT LOADER
        Tries to derive unique departments from already-loaded employees.
@@ -2068,6 +2725,7 @@
                             lastName:        emp.lastName,
                             department:      emp.department,
                             gender:          emp.gender,
+                            designation:     emp.designation, // OT Eligibility Feature
                             ...rec,
                         });
                     });
@@ -2204,7 +2862,7 @@
     function setTableLoading(on) {
         if (on) {
             document.getElementById('dailyAttendanceList').innerHTML =
-                `<tr class="loading-row"><td colspan="15"><span class="spinner"></span> Loading attendance data…</td></tr>`;
+                `<tr class="loading-row"><td colspan="17"><span class="spinner"></span> Loading attendance data…</td></tr>`;
         }
         // false: do nothing — renderDailyTable() replaces the spinner row
     }
@@ -2214,7 +2872,7 @@
         if (!records || records.length === 0) {
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="8">
+                    <td colspan="17">
                         <div class="empty-state">
                             <i class="fas fa-calendar-times"></i>
                             <p>No attendance records found for the selected filters.</p>
@@ -2270,13 +2928,19 @@
                 <!-- Shift Management Feature Start — Shift cell -->
                 <td>${shiftBadge(rec.shift)}</td>
                 <!-- Shift Management Feature End -->
+                <!-- Overnight Shift Feature Start — Shift Date cell (date employee clocked IN on) -->
+                <td>${date}${overnightTag(rec)}</td>
+                <!-- Overnight Shift Feature End -->
                 <!-- Overtime Feature Start — OT cells -->
                 <td>${rec.otHours != null ? formatHours(rec.otHours) : '—'}</td>
-                <td>${rec.totalHours != null ? formatHours((parseFloat(rec.totalHours) || 0) + (parseFloat(rec.otHours) || 0)) : formatHours(rec.totalHours)}</td>
+                <td>${rec.totalHours != null ? formatHours((parseFloat(rec.totalHours) || 0) + 0) : formatHours(rec.totalHours)}</td>
                 <td>${otStatusBadge(rec.overtimeStatus)}</td>
                 <!-- Overtime Feature End -->
+                <!-- OT Eligibility Feature Start -->
+                <td>${otEligibilityBadge(rec)}</td>
+                <!-- OT Eligibility Feature End -->
                 <td style="white-space:nowrap;">
-                    <button class="btn-icon" onclick="openEditModal(this)" title="Edit Attendance">
+                    <button class="btn-icon" onclick="openEditModal(this)" title="Request Regularization">
                         <i class="fas fa-edit"></i>
                     </button>
                     <button class="btn-view-summary" onclick="openAttendanceSummary(this)" title="View Summary">
@@ -2326,9 +2990,11 @@
     }
 
     /* =======================================================================
-       EDIT ATTENDANCE MODAL
-       Check-in/out are read-only (biometric-only); only Status and Notes
-       can be edited manually here.
+       EDIT ATTENDANCE MODAL → now REGULARIZATION REQUEST MODAL
+       Check-in/out are read-only (biometric-only); Status + mandatory
+       Reason/Remarks raise a regularization request instead of writing
+       directly to the attendance record. See Regularization Feature above
+       for the approval workflow.
        ======================================================================= */
     function openEditModal(btn) {
         const row = btn.closest('tr');
@@ -2339,7 +3005,24 @@
         document.getElementById('edit_checkin_display').value  = formatTime(row.dataset.checkin);
         document.getElementById('edit_checkout_display').value = formatTime(row.dataset.checkout);
         document.getElementById('edit_status').value           = row.dataset.status   || 'Present';
-        document.getElementById('edit_notes').value            = row.dataset.notes    || '';
+        document.getElementById('edit_notes').value             = '';
+
+        // Show prior regularization requests raised against this same attendance record, if any
+        const attId = parseInt(row.dataset.attId, 10);
+        const prior = state.regularizationRequests.filter(r => r.attendanceId === attId);
+        const wrap  = document.getElementById('edit_approval_trail_wrap');
+        const trail = document.getElementById('edit_approval_trail');
+        if (prior.length > 0) {
+            trail.innerHTML = prior.map(r => `
+                <div class="trail-row">
+                    <span>${formatDate(r.requestedOn)} — requested <strong>${escapeHtml(r.requestedStatus)}</strong></span>
+                    ${approvalStatusBadge(r.approvalStatus)}
+                </div>`).join('');
+            wrap.style.display = '';
+        } else {
+            wrap.style.display = 'none';
+        }
+
         document.getElementById('editAttendanceModal').classList.add('active');
     }
 
@@ -2349,33 +3032,40 @@
         const empPrimeId   = document.getElementById('edit_employee_prime_id').value;
         const attendanceId = document.getElementById('edit_attendance_id').value;
         const submitBtn    = document.getElementById('editSubmitBtn');
+        const reason        = document.getElementById('edit_notes').value.trim();
 
         if (!empPrimeId) { showToast('Missing employee ID', 'error'); return; }
+        if (!reason) { showToast('Reason / remarks is mandatory for a regularization request', 'warning'); return; }
 
-        // Check-in/out are biometric-only and not editable here — only status/notes are sent.
+        const emp = state.allEmployees.find(e => e.employeePrimeId === parseInt(empPrimeId, 10));
+        const records = mockDB.attendanceByEmp[parseInt(empPrimeId, 10)] || [];
+        const currentRec = records.find(r => r.attendanceId === parseInt(attendanceId, 10));
+
         const payload = {
-            attendanceId:   parseInt(attendanceId, 10) || undefined,
             employeePrimeId: parseInt(empPrimeId, 10),
+            employeeId:      emp?.employeeId || '',
+            employeeName:    emp ? `${emp.firstName} ${emp.lastName}` : document.getElementById('edit_employee_name').value,
+            attendanceId:    parseInt(attendanceId, 10) || undefined,
             attendanceDate:  document.getElementById('edit_attendance_date').value,
-            status:          document.getElementById('edit_status').value,
-            notes:           document.getElementById('edit_notes').value      || null,
+            currentStatus:   currentRec?.status || '',
+            requestedStatus: document.getElementById('edit_status').value,
+            reason:          reason,
         };
 
         submitBtn.disabled    = true;
-        submitBtn.textContent = 'Updating…';
+        submitBtn.textContent = 'Submitting…';
 
         try {
-            await updateAttendance(empPrimeId, payload);
-            showToast('Attendance updated successfully!', 'success');
+            await createRegularizationRequest(payload);
+            showToast('Regularization request submitted for approval.', 'success');
             closeModal('editAttendanceModal');
-            // Refresh data to reflect changes
-            await loadAllAttendanceData();
+            await loadRegularizationRequests();
         } catch (err) {
-            console.error('[Edit Attendance]', err);
-            showToast(`Update failed: ${err.message}`, 'error');
+            console.error('[Regularization Submit]', err);
+            showToast(`Submission failed: ${err.message}`, 'error');
         } finally {
             submitBtn.disabled    = false;
-            submitBtn.textContent = 'Update';
+            submitBtn.textContent = 'Submit for Approval';
         }
     });
 
@@ -2432,15 +3122,19 @@
             return;
         }
 
-        const headers = ['Employee Name', 'Employee ID', 'Department', 'Date', 'Working Hours', 'OT Hours', 'Total Hours', 'Overtime Status'];
+        const headers = ['Employee Name', 'Employee ID', 'Department', 'Date', 'Shift Date', 'Overnight', 'OT Eligible', 'Working Hours', 'OT Hours', 'Total Hours', 'Overtime Status'];
         const rows = records.map(rec => {
             const workingHours = parseFloat(rec.totalHours) || 0;
             const otHours      = parseFloat(rec.otHours) || 0;
+            const emp = state.allEmployees.find(e => e.employeePrimeId === rec.employeePrimeId);
             return [
                 `${rec.firstName || ''} ${rec.lastName || ''}`.trim(),
                 rec.employeeId || rec.employeePrimeId || '',
                 rec.department || '',
                 rec.attendanceDate || '',
+                rec.attendanceDate || '',
+                rec.overnightCross ? 'Yes' : 'No',
+                isOtEligibleDesignation(emp?.designation) ? 'Yes' : 'No (C-Off Only)',
                 workingHours,
                 otHours,
                 (workingHours + otHours).toFixed(2),
@@ -2573,25 +3267,30 @@
         const headers = [
             'Employee Name', 'Employee ID', 'Department', 'Date',
             'Check In', 'Check Out', 'Working Hours', 'OT Hours', 'Status',
-            'Attendance Source', 'Device', 'Biometric Status', 'Shift', 'Overtime Status', 'Notes'
+            'Attendance Source', 'Device', 'Biometric Status', 'Shift', 'Overnight', 'Overtime Status', 'OT Eligible', 'Notes'
         ];
-        const rows = records.map(r => [
-            `${r.firstName || ''} ${r.lastName || ''}`.trim(),
-            r.employeeId || r.employeePrimeId || '',
-            r.department || '',
-            r.attendanceDate || '',
-            formatTime(r.checkInTime),
-            formatTime(r.checkOutTime),
-            r.totalHours != null ? r.totalHours : '',
-            r.otHours != null ? r.otHours : '',
-            r.status || '',
-            r.attendanceSource || '',
-            r.deviceName || '',
-            r.biometricStatus || '',
-            r.shift || '',
-            r.overtimeStatus || '',
-            r.notes || '',
-        ]);
+        const rows = records.map(r => {
+            const emp = state.allEmployees.find(e => e.employeePrimeId === r.employeePrimeId);
+            return [
+                `${r.firstName || ''} ${r.lastName || ''}`.trim(),
+                r.employeeId || r.employeePrimeId || '',
+                r.department || '',
+                r.attendanceDate || '',
+                formatTime(r.checkInTime),
+                formatTime(r.checkOutTime),
+                r.totalHours != null ? r.totalHours : '',
+                r.otHours != null ? r.otHours : '',
+                r.status || '',
+                r.attendanceSource || '',
+                r.deviceName || '',
+                r.biometricStatus || '',
+                r.shift || '',
+                r.overnightCross ? 'Yes' : 'No',
+                r.overtimeStatus || '',
+                isOtEligibleDesignation(emp?.designation) ? 'Yes' : 'No',
+                r.notes || '',
+            ];
+        });
 
         downloadCSV(`attendance_report_${todayISO()}.csv`, headers, rows);
         showToast(`Exported ${records.length} attendance record(s)`, 'success');
@@ -2621,13 +3320,14 @@
         const records = state.filteredRecords;
         if (records.length === 0) { showToast('No records to export for current filters', 'warning'); return; }
 
-        const headers = ['Employee Name', 'Employee ID', 'Department', 'Date', 'Shift', 'Check In', 'Check Out', 'Status'];
+        const headers = ['Employee Name', 'Employee ID', 'Department', 'Date', 'Shift', 'Overnight', 'Check In', 'Check Out', 'Status'];
         const rows = records.map(r => [
             `${r.firstName || ''} ${r.lastName || ''}`.trim(),
             r.employeeId || r.employeePrimeId || '',
             r.department || '',
             r.attendanceDate || '',
             r.shift || '—',
+            r.overnightCross ? 'Yes' : 'No',
             formatTime(r.checkInTime),
             formatTime(r.checkOutTime),
             r.status || '',
@@ -3106,7 +3806,7 @@
                     else if (s === 'not_marked') counts.notMarked++;
                     // Extended Summary Feature Start — new classifications
                     else if (s === 'od')          counts.od++;
-                    else if (s === 'weekly_off')  counts.weeklyOff++;
+                    else if (s === 'weekly_off' || s === 'weekly_off_present')  counts.weeklyOff++;
                     else if (s === 'comp_off')    counts.compOff++;
 
                     const src = (r.attendanceSource || '').toLowerCase();
@@ -3531,6 +4231,11 @@
 
         // Load daily data — date inputs are set inside this call after data arrives
         await loadAllAttendanceData();
+
+        // Load regularization + OD data in background so the Edit modal's
+        // "previous requests" trail is available as soon as the table renders
+        loadRegularizationRequests();
+        loadODRequests();
 
         // If summary tab was restored from localStorage, refresh its data now that records are loaded
         if (localStorage.getItem('attendanceActiveTab') === 'summary') {

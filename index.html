@@ -213,9 +213,6 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:8086';
-        const ADMIN_AUTH_URL = `${API_BASE_URL}/api/admin/auth`;
-
         const loginForm = document.getElementById('loginForm');
         const mobileInput = document.getElementById('mobile');
         const passwordInput = document.getElementById('password');
@@ -265,71 +262,7 @@
             }
         }
 
-        // ========== BOOTSTRAP / LOGIN HANDLER ==========
-
-        async function handleBootstrapOrLogin(mobile, password, firstName, lastName, isBootstrap = false) {
-            const endpoint = isBootstrap ? '/api/admin/bootstrap' : '/api/admin/auth/login';
-
-            try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',  // IMPORTANT: Allows cookies to be set
-                    body: JSON.stringify({
-                        mobile,
-                        password,
-                        ...(isBootstrap && { firstName, lastName })
-                    })
-                });
-
-                const data = await response.json();
-                console.log('Response:', data);
-
-                if (response.ok) {
-                    // CRITICAL: Store user data in localStorage for UI
-                    const userData = {
-                        mobile: data.mobile || mobile,
-                        adminId: data.adminId || '',
-                        role: data.role || 'SUPER_ADMIN',
-                        firstName: data.firstName || firstName || '',
-                        lastName: data.lastName || lastName || '',
-                        fullName: (data.firstName && data.lastName) ?
-                            `${data.firstName} ${data.lastName}` :
-                            (data.firstName || firstName || mobile)
-                    };
-
-                    // Store in localStorage for header display
-                    localStorage.setItem('hrms_logged_in', 'true');
-                    localStorage.setItem('hrms_user', JSON.stringify(userData));
-                    localStorage.setItem('hrms_mobile', userData.mobile);
-                    localStorage.setItem('hrms_role', userData.role);
-                    localStorage.setItem('hrms_adminId', userData.adminId);
-                    localStorage.setItem('hrms_firstName', userData.firstName);
-                    localStorage.setItem('hrms_lastName', userData.lastName);
-                    localStorage.setItem('hrms_fullName', userData.fullName);
-
-                    console.log('✅ User data stored in localStorage:', userData);
-                    console.log('📦 All localStorage keys:', Object.keys(localStorage));
-
-                    // Cookies are automatically stored in Cookie storage (check Application → Cookies)
-                    console.log('🍪 Cookies should be set - Check Application → Cookies → localhost:8086');
-
-                    // Redirect to dashboard
-                    setTimeout(() => {
-                        window.location.href = 'dashboard.html';
-                    }, 1000);
-
-                } else {
-                    console.error('Failed:', data.message || data.error);
-                }
-
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
-
-
-        // Main Login Function
+        // Main Login Function - No backend connectivity
         async function handleLogin(event) {
             event.preventDefault();
             const mobile = mobileInput?.value?.trim();
@@ -350,74 +283,42 @@
 
             setLoading(true);
 
-            try {
-                const response = await fetch(`${ADMIN_AUTH_URL}/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ mobile: mobile, password: password })
-                });
+            // Simulate login delay
+            setTimeout(() => {
+                // Store user data in localStorage
+                const userData = {
+                    mobile: mobile,
+                    adminId: 'ADMIN_' + Date.now(),
+                    role: 'ADMIN',
+                    firstName: 'Admin',
+                    lastName: 'User',
+                    fullName: 'Admin User'
+                };
 
-                const data = await response.json();
-                console.log('Login response:', data);
+                localStorage.setItem('hrms_logged_in', 'true');
+                localStorage.setItem('hrms_user', JSON.stringify(userData));
+                localStorage.setItem('hrms_mobile', mobile);
+                localStorage.setItem('hrms_role', 'ADMIN');
+                localStorage.setItem('hrms_adminId', userData.adminId);
+                localStorage.setItem('hrms_firstName', 'Admin');
+                localStorage.setItem('hrms_lastName', 'User');
+                localStorage.setItem('hrms_fullName', 'Admin User');
 
+                console.log('✅ User data stored in localStorage:', userData);
+                console.log('📦 All localStorage keys:', Object.keys(localStorage));
 
-                if (response.ok) {
-                    // CRITICAL: Store user data with firstName and lastName
-                    const firstName = data.firstName || '';
-                    const lastName = data.lastName || '';
-
-                    const userData = {
-                        mobile: data.mobile || mobile,
-                        adminId: data.adminId || '',
-                        role: data.role || 'ADMIN',
-                        firstName: firstName,
-                        lastName: lastName,
-                        fullName: (firstName && lastName) ? `${firstName} ${lastName}` : (firstName || data.mobile || mobile)
-                    };
-
-                    // Store all user data
-                    localStorage.setItem('hrms_logged_in', 'true');
-                    localStorage.setItem('hrms_user', JSON.stringify(userData));
-                   
-                    console.log('✅ User data stored in localStorage:');
-                    console.log('  firstName:', firstName);
-                    console.log('  lastName:', lastName);
-                    console.log('  fullName:', userData.fullName);
-                    console.log('  All keys:', Object.keys(localStorage));
-
-                    showNotification('Login successful!', 'success');
-                    setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
-                } else {
-                    showNotification(data.message || data.error || 'Invalid credentials', 'error');
-                    setLoading(false);
-                    if (passwordInput) passwordInput.value = '';
-                }
-            } catch (error) {
-                console.error('Login error:', error);
-                showNotification('Network error. Please check if server is running.', 'error');
-                setLoading(false);
-            }
+                showNotification('Login successful!', 'success');
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 1000);
+            }, 800);
         }
 
         // Check existing session
-        async function checkExistingSession() {
+        function checkExistingSession() {
             const isLoggedIn = localStorage.getItem('hrms_logged_in');
             if (isLoggedIn === 'true') {
-                // Verify with backend
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/admin/get-all-admin`, {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    if (response.ok) {
-                        window.location.href = 'dashboard.html';
-                    } else {
-                        // Session invalid, clear storage
-                        localStorage.clear();
-                    }
-                } catch (e) { console.log('Session check failed:', e); }
+                window.location.href = 'dashboard.html';
             }
         }
 
