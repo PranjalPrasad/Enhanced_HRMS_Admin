@@ -227,17 +227,6 @@
             this.querySelector('i').classList.toggle('fa-eye-slash');
         });
 
-        // Load saved credentials
-        function loadSavedCredentials() {
-            const savedMobile = localStorage.getItem('hrms_mobile');
-            const savedPassword = localStorage.getItem('hrms_password');
-            const savedRemember = localStorage.getItem('hrms_remember') === 'true';
-            if (savedRemember && savedMobile && savedPassword) {
-                if (mobileInput) mobileInput.value = savedMobile;
-                if (passwordInput) passwordInput.value = savedPassword;
-            }
-        }
-
         function showNotification(message, type = 'success') {
             const existingToast = document.querySelector('.notification-toast');
             if (existingToast) existingToast.remove();
@@ -263,6 +252,8 @@
         }
 
         // Main Login Function - No backend connectivity
+        // Redirects to dashboard ONLY when the user manually fills mobile + password
+        // and clicks Sign In (no auto-fill, no auto-redirect from a previous session).
         async function handleLogin(event) {
             event.preventDefault();
             const mobile = mobileInput?.value?.trim();
@@ -314,17 +305,7 @@
             }, 800);
         }
 
-        // Check existing session
-        function checkExistingSession() {
-            const isLoggedIn = localStorage.getItem('hrms_logged_in');
-            if (isLoggedIn === 'true') {
-                window.location.href = 'dashboard.html';
-            }
-        }
-
         loginForm?.addEventListener('submit', handleLogin);
-        loadSavedCredentials();
-        checkExistingSession();
     </script>
 </body>
 
