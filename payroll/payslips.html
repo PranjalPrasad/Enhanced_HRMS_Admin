@@ -1049,9 +1049,28 @@ function generateExcel(records, filenameBase) {
 }
 
 /* ═══════════════════════════════════════════
-   EPF TEXT FILE + ESIC TEMPLATE — quick shortcuts
-   (mirrors the exports available on the Salary Structure page)
+   EPF ECR + ESIC MONTHLY CONTRIBUTION — real government-portal formats
+   (mirrors the exports available on the Salary Structure page — see
+   the detailed rule comments there for the full EPFO/ESIC spec)
 ═══════════════════════════════════════════ */
+// Statutory-ID lookup — should come from the Employee Master via the
+// backend once wired up (see API notes). Missing entries are treated
+// as "not captured yet" and the row is excluded with a warning,
+// matching what the real EPFO/ESIC portals would do.
+var EMPLOYEE_STATUTORY_IDS = {
+  EMP001: { uan:'100987654321', esicIpNumber:'5110098765' },
+  EMP002: { uan:'100987654322', esicIpNumber:null },
+  EMP003: { uan:null,            esicIpNumber:'5110098767' },
+  EMP004: { uan:'100987654324', esicIpNumber:'5110098769' },
+  EMP005: { uan:'100987654325', esicIpNumber:'5110098770' },
+  EMP006: { uan:'100987654326', esicIpNumber:'5110098771' }
+};
+var EPF_WAGE_CEILING_PS  = 15000;
+var ESIC_WAGE_CEILING_PS = 21000;
+var ECR_DELIMITER_PS = '#~#';
+
+function validEcrNamePS(name) { return /^[A-Za-z. ]+$/.test(name || ''); }
+
 function downloadEPFTextFile() {
   var rows = filteredRecords.length ? filteredRecords : allRecords;
   if (!rows.length) { showToast('No records available to export.', 'error'); return; }
@@ -1060,27 +1079,49 @@ function downloadEPFTextFile() {
   var years  = [...new Set(rows.map(function(r){return r.payrollYear; }))];
   var period = (months.length===1?monthLabel(months[0]):'Multiple') + '_' + (years.length===1?years[0]:years.join('-'));
 
-  var lines = [];
-  lines.push('# DEMO EPF ECR TEXT FILE — ' + period.replace(/_/g,' '));
-  lines.push('# Format: UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages#~#EPFContribution#~#EPSContribution#~#EPFEPSDiff#~#NCPDays#~#Refund');
-  rows.forEach(function(r, idx) {
-    var uan = '1009' + String(1000000 + idx).padStart(9, '0');
-    var epfWages = safe(r.basicSalary);
-    var epsWages = Math.min(epfWages, 15000);
-    var epfContribution = Math.round(epfWages * 0.12);
-    var epsContribution = Math.round(epsWages * 0.0833);
-    var epfEpsDiff = epfContribution - epsContribution;
-    lines.push([uan, r.fullName, safe(r.grossSalary), epfWages, epsWages, epfWages,
-      epfContribution, epsContribution, epfEpsDiff, safe(r.lopDays), 0].join('#~#'));
+  var validLines = [];
+  var errors = [];
+
+  rows.forEach(function(r) {
+    var ids = EMPLOYEE_STATUTORY_IDS[r.employeeId] || {};
+    if (!ids.uan || !/^\d{7,12}$/.test(String(ids.uan))) {
+      errors.push(r.fullName + ': missing/invalid UAN — excluded from ECR.');
+      return;
+    }
+    var nameForEcr = (r.fullName || '').trim();
+    if (!validEcrNamePS(nameForEcr)) {
+      errors.push(r.fullName + ': name has disallowed characters — excluded.');
+      return;
+    }
+    var epfWages  = safe(r.basicSalary);
+    var epsWages  = Math.min(epfWages, EPF_WAGE_CEILING_PS);
+    var edliWages = Math.min(epfWages, EPF_WAGE_CEILING_PS);
+    var epfEeContribution = Math.round(epfWages * 0.12);
+    var epsContribution   = Math.round(epsWages * 0.0833);
+    var epfErDiffShare    = Math.round(epfWages * 0.12) - epsContribution;
+    validLines.push([ids.uan, nameForEcr, safe(r.grossSalary), epfWages, epsWages, edliWages,
+      epfEeContribution, epsContribution, epfErDiffShare, safe(r.lopDays), 0].join(ECR_DELIMITER_PS));
   });
 
-  var blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+  if (!validLines.length) {
+    showToast('No valid rows to export — fix UAN/name data in Employee Master first.', 'error');
+    if (errors.length) console.warn('[EPF ECR] Validation errors:', errors);
+    return;
+  }
+
+  var blob = new Blob([validLines.join('\r\n') + '\r\n'], { type: 'text/plain' });
   var url  = URL.createObjectURL(blob);
   var a    = document.createElement('a');
-  a.href = url; a.download = 'EPF_ECR_' + period + '.txt';
+  a.href = url; a.download = 'ECR_' + period + '.txt';
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
-  showToast('EPF text file downloaded (demo format).', 'success');
+
+  if (errors.length) {
+    showToast('EPF ECR downloaded — ' + validLines.length + ' row(s) exported, ' + errors.length + ' skipped (see console).', 'info');
+    console.warn('[EPF ECR] Skipped rows:\n' + errors.join('\n'));
+  } else {
+    showToast('EPF ECR text file downloaded (' + validLines.length + ' member(s), EPFO UAN format).', 'success');
+  }
 }
 
 function downloadESICTemplate() {
@@ -1092,32 +1133,54 @@ function downloadESICTemplate() {
   var years  = [...new Set(rows.map(function(r){return r.payrollYear; }))];
   var period = (months.length===1?monthLabel(months[0]):'Multiple Months') + ' ' + (years.length===1?years[0]:years.join('/'));
 
-  var wsData = [];
-  wsData.push(['ESIC Contribution Template — ' + period + ' (Demo)']);
-  wsData.push([]);
-  wsData.push(['Sr. No.','IP Number (dummy)','Employee Name','Days Worked','Total Wages (₹)','Employee Contribution 0.75% (₹)','Employer Contribution 3.25% (₹)','Total Contribution (₹)']);
+  var eligible = [];
+  var excluded = [];
 
-  rows.forEach(function(r, idx) {
-    var ipNumber = '51' + String(100000 + idx).padStart(10, '0');
+  rows.forEach(function(r) {
+    var ids = EMPLOYEE_STATUTORY_IDS[r.employeeId] || {};
     var wages = safe(r.grossSalary);
-    var empContrib = Math.round(wages * 0.0075);
-    var emplrContrib = Math.round(wages * 0.0325);
-    wsData.push([idx+1, ipNumber, r.fullName, r.daysWorked||26, wages, empContrib, emplrContrib, empContrib+emplrContrib]);
+    if (wages > ESIC_WAGE_CEILING_PS) {
+      excluded.push(r.fullName + ': gross ₹' + wages + ' exceeds ESI wage ceiling (₹' + ESIC_WAGE_CEILING_PS + ').');
+      return;
+    }
+    if (!ids.esicIpNumber || !/^\d{10}$/.test(String(ids.esicIpNumber))) {
+      excluded.push(r.fullName + ': missing/invalid 10-digit ESIC IP Number — excluded.');
+      return;
+    }
+    eligible.push({ r: r, ids: ids, wages: wages });
+  });
+
+  if (!eligible.length) {
+    showToast('No ESI-eligible employees to export for ' + period + '.', 'error');
+    if (excluded.length) console.warn('[ESIC] Exclusions:', excluded);
+    return;
+  }
+
+  var wsData = [];
+  wsData.push(['IP Number', 'IP Name', 'No. of Days', 'Total Monthly Wages', 'Reason for 0 Wages', 'Last Working Day']);
+
+  eligible.forEach(function(e) {
+    wsData.push([String(e.ids.esicIpNumber), e.r.fullName, e.r.daysWorked || '', e.wages, '', '']);
   });
 
   var ws = XLSX.utils.aoa_to_sheet(wsData);
-  ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:7} }];
-  ws['A1'].s = { font:{bold:true,sz:13,color:{rgb:'FFFFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'FF1B738C'}}, alignment:{horizontal:'center'} };
-  ['A','B','C','D','E','F','G','H'].forEach(function(col) {
-    var addr = col + '3';
-    if (ws[addr]) ws[addr].s = { font:{bold:true,color:{rgb:'FFFFFFFF'}}, fill:{patternType:'solid',fgColor:{rgb:'FF1B738C'}}, alignment:{horizontal:'center',wrapText:true} };
+  Object.keys(ws).forEach(function(cellRef) {
+    if (cellRef[0] === '!') return;
+    var rowNum = parseInt(cellRef.replace(/^[A-Z]+/, ''), 10);
+    if (rowNum > 1 && ws[cellRef]) { ws[cellRef].t = 's'; ws[cellRef].v = String(ws[cellRef].v); }
   });
-  ws['!cols'] = [{wch:8},{wch:16},{wch:22},{wch:12},{wch:14},{wch:20},{wch:20},{wch:18}];
+  ws['!cols'] = [{wch:14},{wch:22},{wch:12},{wch:18},{wch:20},{wch:16}];
 
   var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'ESIC Contribution');
-  XLSX.writeFile(wb, 'ESIC_Template_' + period.replace(/\s+/g,'_') + '.xlsx');
-  showToast('ESIC contribution template downloaded (demo format).', 'success');
+  XLSX.utils.book_append_sheet(wb, ws, 'MC_Upload');
+  XLSX.writeFile(wb, 'ESIC_MC_' + period.replace(/\s+/g,'_') + '.xls', { bookType: 'biff8' });
+
+  if (excluded.length) {
+    showToast('ESIC file downloaded — ' + eligible.length + ' eligible, ' + excluded.length + ' excluded (see console).', 'info');
+    console.warn('[ESIC] Exclusions:\n' + excluded.join('\n'));
+  } else {
+    showToast('ESIC monthly contribution file downloaded (' + eligible.length + ' employee(s)).', 'success');
+  }
 }
 
 /* ═══════════════════════════════════════════

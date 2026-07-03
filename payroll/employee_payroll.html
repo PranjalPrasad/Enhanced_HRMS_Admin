@@ -198,19 +198,69 @@
             to   { opacity: 1; transform: translateY(0); }
         }
 
-        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        /* ══════════════════════════════════════════
+           TABLE — FIXED
+           Previously the table had no min-width and cells
+           could wrap/compress inside overflow-x-auto, making
+           it look cut off / half-rendered on smaller screens.
+           Now: table has a guaranteed min-width, every cell
+           keeps its content on one line (no wrapping), the
+           header stays pinned while scrolling horizontally
+           within the card, and the scroll container has a
+           visible scrollbar + edge fade so it's obvious the
+           table continues sideways instead of looking broken.
+        ══════════════════════════════════════════ */
+        .table-scroll {
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: visible;
+            -webkit-overflow-scrolling: touch;
+            border: 1px solid #d4edf5;
+            border-radius: 10px;
+        }
+        .table-scroll::-webkit-scrollbar { height: 8px; }
+        .table-scroll::-webkit-scrollbar-track { background: #EBF4F6; border-radius: 10px; }
+        .table-scroll::-webkit-scrollbar-thumb { background: #9ed6ea; border-radius: 10px; }
+        .table-scroll::-webkit-scrollbar-thumb:hover { background: var(--primary-light); }
+
+        .data-table {
+            width: 100%;
+            min-width: 1180px;   /* forces all 12 columns to keep breathing room instead of squashing */
+            border-collapse: collapse;
+            font-size: 13px;
+            table-layout: auto;
+        }
         .data-table th {
             text-align: left;
-            padding: 10px 12px;
+            padding: 10px 14px;
             color: var(--primary);
             font-weight: 700;
             font-size: 12px;
             border-bottom: 2px solid #62C9EA;
             background: #EBF4F6;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 1;
         }
-        .data-table td { padding: 10px 12px; border-bottom: 1px solid #e4f3f8; vertical-align: middle; }
+        .data-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid #e4f3f8;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .data-table td:first-child,
+        .data-table th:first-child {
+            position: sticky;
+            left: 0;
+            background: #fff;
+            z-index: 1;
+            box-shadow: 1px 0 0 #e4f3f8;
+        }
+        .data-table th:first-child { background: #EBF4F6; z-index: 2; }
         .data-table tr:last-child td { border-bottom: none; }
         .data-table tbody tr:hover { background: rgba(27,115,140,0.03); cursor: pointer; }
+        .data-table tbody tr:hover td:first-child { background: #f4fbfd; }
 
         .badge {
             font-size: 11px;
@@ -219,6 +269,7 @@
             border-radius: 20px;
             background: rgba(27,115,140,0.08);
             color: var(--primary);
+            white-space: nowrap;
         }
 
         .stat-card {
@@ -640,8 +691,8 @@
                     </div>
                 </div>
 
-                <div class="overflow-x-auto">
-                    <table class="data-table w-full">
+                <div class="table-scroll">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Employee</th>
@@ -733,13 +784,17 @@ const OT_RATE_PER_HOUR = 200; // ₹/hour, demo rate used to auto-compute OT amo
 
 // DUMMY payroll summary + salary list rows (already-processed records shown below the form)
 const DUMMY_SALARY_ROWS = [
-    { fullName:'Rahul Sharma',    department:'IT',              basicSalary:45000, hra:22500, allowances:3000, odDays:2, otAmount:1200, grossSalary:70500, lopDeduction:1731, totalDeductions:10800, expenseReimbursement:1500, netSalary:59469 },
-    { fullName:'Priya Verma',     department:'Human Resources', basicSalary:38000, hra:19000, allowances:2000, odDays:1, otAmount:0,    grossSalary:59000, lopDeduction:0,    totalDeductions:9120,  expenseReimbursement:0,    netSalary:49880 },
-    { fullName:'Amit Kumar',      department:'Finance',         basicSalary:65000, hra:32500, allowances:5000, odDays:3, otAmount:0,    grossSalary:102500,lopDeduction:0,    totalDeductions:15600, expenseReimbursement:2200, netSalary:89100 },
-    { fullName:'Sneha Patil',     department:'Sales',           basicSalary:32000, hra:16000, allowances:1500, odDays:0, otAmount:1600, grossSalary:51100, lopDeduction:2462, totalDeductions:7680,  expenseReimbursement:0,    netSalary:40958 },
-    { fullName:'Vikram Singh',    department:'IT',              basicSalary:85000, hra:42500, allowances:6000, odDays:1, otAmount:0,    grossSalary:133500,lopDeduction:0,    totalDeductions:20400, expenseReimbursement:3000, netSalary:116100 },
-    { fullName:'Anjali Deshmukh', department:'IT',              basicSalary:28000, hra:14000, allowances:1000, odDays:2, otAmount:2000, grossSalary:45000, lopDeduction:1077, totalDeductions:6720,  expenseReimbursement:0,    netSalary:37203 }
+    { fullName:'Rahul Sharma',    department:'IT',              basicSalary:45000, hra:22500, allowances:3000, odDays:2, otAmount:1200, grossSalary:70500, lopDeduction:1731, totalDeductions:10800, expenseReimbursement:1500, netSalary:59469, uan:'100987654321', esicIpNumber:'5110098765', daysPresent:22 },
+    { fullName:'Priya Verma',     department:'Human Resources', basicSalary:38000, hra:19000, allowances:2000, odDays:1, otAmount:0,    grossSalary:59000, lopDeduction:0,    totalDeductions:9120,  expenseReimbursement:0,    netSalary:49880, uan:'100987654322', esicIpNumber:null,          daysPresent:24 },
+    { fullName:'Amit Kumar',      department:'Finance',         basicSalary:65000, hra:32500, allowances:5000, odDays:3, otAmount:0,    grossSalary:102500,lopDeduction:0,    totalDeductions:15600, expenseReimbursement:2200, netSalary:89100, uan:null,             esicIpNumber:'5110098767', daysPresent:23 },
+    { fullName:'Sneha Patil',     department:'Sales',           basicSalary:32000, hra:16000, allowances:1500, odDays:0, otAmount:1600, grossSalary:51100, lopDeduction:2462, totalDeductions:7680,  expenseReimbursement:0,    netSalary:40958, uan:'100987654324', esicIpNumber:'5110098769', daysPresent:20 },
+    { fullName:'Vikram Singh',    department:'IT',              basicSalary:85000, hra:42500, allowances:6000, odDays:1, otAmount:0,    grossSalary:133500,lopDeduction:0,    totalDeductions:20400, expenseReimbursement:3000, netSalary:116100,uan:'100987654325', esicIpNumber:'5110098770', daysPresent:25 },
+    { fullName:'Anjali Deshmukh', department:'IT',              basicSalary:28000, hra:14000, allowances:1000, odDays:2, otAmount:2000, grossSalary:45000, lopDeduction:1077, totalDeductions:6720,  expenseReimbursement:0,    netSalary:37203, uan:'100987654326', esicIpNumber:'5110098771', daysPresent:21 }
 ];
+// NOTE: uan / esicIpNumber should come from the Employee Master (backend) once
+// wired up. A null value here simulates an employee record where that
+// statutory ID hasn't been captured yet, which the real-format exports
+// below now validate against instead of silently generating a fake ID.
 
 let employeeCache   = {};
 let formOpen        = false;
@@ -1239,8 +1294,31 @@ async function submitInitiatePay() {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// EPF TEXT FILE EXPORT  (NEW — demo / sample ECR-style format)
+// EPF ECR TEXT FILE EXPORT — Real UAN-based EPFO format
+// Reference: EPFO "Electronic Challan cum Return" (UAN-based, current
+// format) — plain text, ONE detail line per member, fields separated
+// by the literal 3-character delimiter #~# , no header/comment lines
+// (the portal rejects anything that isn't a pure data line):
+//   UAN #~# MemberName #~# GrossWages #~# EPFWages #~# EPSWages #~#
+//   EDLIWages #~# EPFContributionRemitted(EEShare) #~#
+//   EPSContributionRemitted #~# EPF-EPS-DiffRemitted(ERShare) #~#
+//   NCPDays #~# RefundOfAdvances
+// Rules enforced below (per EPFO file-structure spec):
+//   - UAN must be present & numeric (EPFO account no. field)
+//   - Member name: letters/spaces/'.' only, no other special characters
+//   - Wage/contribution fields: whole numbers only (no decimals)
+//   - EPS wages capped at the statutory ceiling of ₹15,000
+//   - Members missing a UAN are EXCLUDED and flagged — EPFO will
+//     reject any row without a valid, Aadhaar-seeded UAN
 // ─────────────────────────────────────────────────────────────────
+const EPF_WAGE_CEILING = 15000; // EPS/EDLI statutory wage ceiling
+const ECR_DELIMITER = '#~#';
+
+function validEcrName(name) {
+    // EPFO: "No special characters other than '.' are allowed"
+    return /^[A-Za-z. ]+$/.test(name || '');
+}
+
 function downloadEPFTextFile() {
     const dept = document.getElementById('payrollDept').value;
     const { label, monthEnum, year } = getSelectedMonthYear();
@@ -1248,39 +1326,76 @@ function downloadEPFTextFile() {
 
     if (!rows.length) { showToast('No salary data available to export.', 'error'); return; }
 
-    // Simplified/sample EPF ECR-style pipe-delimited text file.
-    // Format (per line): UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages#~#EPFContribution#~#EPSContribution#~#EPFEPSDiff#~#NCPDays#~#Refund
-    let lines = [];
-    lines.push(`# DEMO EPF ECR TEXT FILE — ${label} — Department: ${dept === 'all' ? 'All' : dept}`);
-    lines.push(`# Format: UAN#~#Name#~#GrossWages#~#EPFWages#~#EPSWages#~#EDLIWages#~#EPFContribution#~#EPSContribution#~#EPFEPSDiff#~#NCPDays#~#Refund`);
-    rows.forEach((r, idx) => {
-        const uan = '1009' + String(1000000 + idx).padStart(9, '0'); // dummy UAN
-        const epfWages = r.basicSalary;
-        const epsWages = Math.min(epfWages, 15000);
-        const epfContribution = Math.round(epfWages * 0.12);
-        const epsContribution = Math.round(epsWages * 0.0833);
-        const epfEpsDiff = epfContribution - epsContribution;
-        lines.push([
-            uan, r.fullName, r.grossSalary, epfWages, epsWages, epfWages,
-            epfContribution, epsContribution, epfEpsDiff, 0, 0
-        ].join('#~#'));
+    const validLines = [];
+    const errors = [];
+
+    rows.forEach(r => {
+        if (!r.uan || !/^\d{7,12}$/.test(String(r.uan))) {
+            errors.push(`${r.fullName}: missing/invalid UAN — excluded from ECR (EPFO will reject unseeded rows).`);
+            return;
+        }
+        const nameForEcr = (r.fullName || '').trim();
+        if (!validEcrName(nameForEcr)) {
+            errors.push(`${r.fullName}: name has characters not allowed by EPFO (only letters, spaces, '.') — excluded.`);
+            return;
+        }
+
+        const epfWages  = Math.round(r.basicSalary);
+        const epsWages  = Math.min(epfWages, EPF_WAGE_CEILING);
+        const edliWages = Math.min(epfWages, EPF_WAGE_CEILING);
+        const epfEeContribution  = Math.round(epfWages * 0.12);          // employee share, 12%
+        const epsContribution    = Math.round(epsWages * 0.0833);        // employer's EPS share, 8.33%
+        const epfErDiffShare     = Math.round(epfWages * 0.12) - epsContribution; // employer EPF share = 12% - EPS share
+
+        validLines.push([
+            r.uan, nameForEcr, Math.round(r.grossSalary), epfWages, epsWages, edliWages,
+            epfEeContribution, epsContribution, epfErDiffShare, 0, 0
+        ].join(ECR_DELIMITER));
     });
 
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    if (!validLines.length) {
+        showToast('No valid rows to export — all employees are missing UAN/valid name. Fix Employee Master data first.', 'error');
+        if (errors.length) console.warn('[EPF ECR] Validation errors:', errors);
+        return;
+    }
+
+    // Pure data file — EPFO upload does NOT accept header/comment lines
+    const blob = new Blob([validLines.join('\r\n') + '\r\n'], { type: 'text/plain' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `EPF_ECR_${monthEnum || 'MONTH'}_${year || ''}.txt`;
+    a.download = `ECR_${monthEnum || 'MONTH'}_${year || ''}.txt`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-    showToast('EPF text file downloaded (demo format).', 'success');
+
+    if (errors.length) {
+        showToast(`EPF ECR downloaded — ${validLines.length} row(s) exported, ${errors.length} skipped (see console).`, 'info');
+        console.warn('[EPF ECR] Skipped rows:\n' + errors.join('\n'));
+    } else {
+        showToast(`EPF ECR text file downloaded (${validLines.length} member(s), EPFO UAN format).`, 'success');
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// ESIC CONTRIBUTION TEMPLATE (Excel) EXPORT  (NEW)
+// ESIC MONTHLY CONTRIBUTION EXPORT — Real ESIC employer-portal format
+// Reference: ESIC "Enter Monthly Contribution" bulk-upload layout —
+// IP Number, IP Name, No. of Days, Total Monthly Wages, Reason (for
+// 0-wage days), Last Working Day. Employer must save as text-formatted
+// columns (dates dd-mm-yyyy); we generate the equivalent .xlsx here —
+// re-save as "Excel 97-2003 (.xls)" with all columns as Text before
+// uploading to the ESIC portal, since that's the exact upload type it
+// expects.
+// Rules enforced below (per ESIC scheme rules):
+//   - Only employees at/below the ESI statutory wage ceiling (₹21,000
+//     gross/month) are ESI-eligible — others are excluded, same as
+//     the real portal would reject/ignore them
+//   - IP Number must be present (10-digit ESIC Insurance Number)
+//   - Employee 0.75% / Employer 3.25% of gross wages (current rates)
 // ─────────────────────────────────────────────────────────────────
+const ESIC_WAGE_CEILING = 21000;
+
 function downloadESICTemplate() {
     if (typeof XLSX === 'undefined') { showToast('Excel library not loaded.', 'error'); return; }
 
@@ -1290,34 +1405,62 @@ function downloadESICTemplate() {
 
     if (!rows.length) { showToast('No salary data available to export.', 'error'); return; }
 
-    const wsData = [];
-    wsData.push([`ESIC Contribution Template — ${label} (Demo)`]);
-    wsData.push([`Department: ${dept === 'all' ? 'All' : dept}`]);
-    wsData.push([]);
-    wsData.push(['Sr. No.','IP Number (dummy)','Employee Name','Days Worked','Total Wages (₹)','Employee Contribution 0.75% (₹)','Employer Contribution 3.25% (₹)','Total Contribution (₹)']);
+    const eligible = [];
+    const excluded = [];
 
-    rows.forEach((r, idx) => {
-        const ipNumber   = '51' + String(100000 + idx).padStart(10, '0');
-        const wages      = r.grossSalary;
-        const empContrib = Math.round(wages * 0.0075);
-        const emplrContrib = Math.round(wages * 0.0325);
-        wsData.push([idx + 1, ipNumber, r.fullName, 26, wages, empContrib, emplrContrib, empContrib + emplrContrib]);
+    rows.forEach(r => {
+        if (r.grossSalary > ESIC_WAGE_CEILING) {
+            excluded.push(`${r.fullName}: gross ₹${r.grossSalary} exceeds ESI wage ceiling (₹${ESIC_WAGE_CEILING}) — not ESI-eligible.`);
+            return;
+        }
+        if (!r.esicIpNumber || !/^\d{10}$/.test(String(r.esicIpNumber))) {
+            excluded.push(`${r.fullName}: missing/invalid 10-digit ESIC IP Number — excluded.`);
+            return;
+        }
+        eligible.push(r);
+    });
+
+    if (!eligible.length) {
+        showToast(`No ESI-eligible employees to export for ${label}${excluded.length ? ' (all excluded — see console)' : ''}.`, 'error');
+        if (excluded.length) console.warn('[ESIC] Exclusions:', excluded);
+        return;
+    }
+
+    const wsData = [];
+    wsData.push(['IP Number', 'IP Name', 'No. of Days', 'Total Monthly Wages', 'Reason for 0 Wages', 'Last Working Day']);
+
+    eligible.forEach(r => {
+        const days = r.daysPresent != null ? r.daysPresent : '';
+        wsData.push([
+            String(r.esicIpNumber),
+            r.fullName,
+            days,
+            Math.round(r.grossSalary),
+            '',   // Reason for 0-wage days — leave blank unless applicable
+            ''    // Last Working Day — leave blank unless the employee exited this month
+        ]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
-    ws['!merges'] = [{ s:{r:0,c:0}, e:{r:0,c:7} }, { s:{r:1,c:0}, e:{r:1,c:7} }];
-    ws['A1'].s = { font:{ bold:true, sz:13, color:{rgb:'FFFFFFFF'} }, fill:{ patternType:'solid', fgColor:{rgb:'FF1B738C'} }, alignment:{horizontal:'center'} };
-    ws['A2'].s = { font:{ italic:true, sz:10, color:{rgb:'FF1B738C'} }, alignment:{horizontal:'center'} };
-    ['A','B','C','D','E','F','G','H'].forEach(col => {
-        const addr = col + '4';
-        if (ws[addr]) ws[addr].s = { font:{bold:true, color:{rgb:'FFFFFFFF'}}, fill:{patternType:'solid', fgColor:{rgb:'FF1B738C'}}, alignment:{horizontal:'center', wrapText:true} };
+    // ESIC portal requires every column, including numbers, as TEXT
+    Object.keys(ws).forEach(cellRef => {
+        if (cellRef[0] === '!') return;
+        const rowNum = parseInt(cellRef.replace(/^[A-Z]+/, ''), 10);
+        if (rowNum > 1 && ws[cellRef]) { ws[cellRef].t = 's'; ws[cellRef].v = String(ws[cellRef].v); }
     });
-    ws['!cols'] = [{wch:8},{wch:16},{wch:22},{wch:12},{wch:14},{wch:20},{wch:20},{wch:18}];
+    ws['!cols'] = [{wch:14},{wch:22},{wch:12},{wch:18},{wch:20},{wch:16}];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'ESIC Contribution');
-    XLSX.writeFile(wb, `ESIC_Template_${monthEnum || 'MONTH'}_${year || ''}.xlsx`);
-    showToast('ESIC contribution template downloaded (demo format).', 'success');
+    XLSX.utils.book_append_sheet(wb, ws, 'MC_Upload');
+    // Save as .xls (Excel 97-2003) filename — matches what the ESIC portal accepts
+    XLSX.writeFile(wb, `ESIC_MC_${monthEnum || 'MONTH'}_${year || ''}.xls`, { bookType: 'biff8' });
+
+    if (excluded.length) {
+        showToast(`ESIC file downloaded — ${eligible.length} eligible, ${excluded.length} excluded (see console).`, 'info');
+        console.warn('[ESIC] Exclusions:\n' + excluded.join('\n'));
+    } else {
+        showToast(`ESIC monthly contribution file downloaded (${eligible.length} employee(s)).`, 'success');
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────

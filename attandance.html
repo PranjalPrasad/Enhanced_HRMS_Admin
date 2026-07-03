@@ -2233,29 +2233,100 @@
     // Shift Management Feature Start — Shift Change Requests
     // ==============================
 
-    /** MOCKED — list all shift change requests */
+    /** Backend-integrated — list all shift change requests, falls back to mock */
     async function fetchShiftRequests() {
+        try {
+            const res = await apiRequest(API_ENDPOINTS.SHIFT_REQUESTS);
+            if (res && res.ok) return await res.json();
+        } catch (err) {
+            console.warn('[Shift Requests] Backend not reachable, using mock data:', err.message);
+        }
         initMockData();
         await mockDelay(300);
         return mockDB.shiftRequests;
     }
 
-    /** MOCKED — approve a shift request */
+    // ==============================
+    // Shift-Change Approval Rule Start — "Both Days Present"
+    // Confirmed rule: to approve a shift change, the employee must be
+    // marked Present (or Late / Half_Day / Weekly_Off_Present — i.e. a
+    // status that means they physically attended) on BOTH:
+    //   1) the OLD shift's last day  = the calendar day immediately
+    //      before requestedDate (requestedDate is the day the new
+    //      shift takes effect)
+    //   2) the NEW shift's first day = requestedDate itself
+    // If attendance for either of those two days is missing (e.g. the
+    // request is for a future date and that day hasn't happened yet)
+    // or is not a "present" status, the request is NOT eligible for
+    // approval and the Approve action is blocked.
+    // ==============================
+    const PRESENT_ATTENDANCE_STATUSES = ['Present', 'Late', 'Half_Day', 'Weekly_Off_Present'];
+
+    function addDaysISO(iso, delta) {
+        const d = new Date(iso + 'T00:00:00');
+        d.setDate(d.getDate() + delta);
+        return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+    }
+
+    /** Evaluates the "Both Days Present" rule for a shift request */
+    function checkBothDaysPresentRule(req) {
+        const records = mockDB.attendanceByEmp[req.employeePrimeId] || [];
+        const oldShiftLastDay  = addDaysISO(req.requestedDate, -1);
+        const newShiftFirstDay = req.requestedDate;
+
+        const oldDayRec = records.find(r => r.attendanceDate === oldShiftLastDay);
+        const newDayRec = records.find(r => r.attendanceDate === newShiftFirstDay);
+
+        const oldDayOk = !!oldDayRec && PRESENT_ATTENDANCE_STATUSES.includes(oldDayRec.status);
+        const newDayOk = !!newDayRec && PRESENT_ATTENDANCE_STATUSES.includes(newDayRec.status);
+
+        return {
+            eligible: oldDayOk && newDayOk,
+            oldShiftLastDay, newShiftFirstDay,
+            oldDayStatus: oldDayRec ? oldDayRec.status : 'Not_Marked',
+            newDayStatus: newDayRec ? newDayRec.status : 'Not_Marked',
+        };
+    }
+    // Shift-Change Approval Rule End
+
+    /** Backend-integrated — approve a shift request (enforces "Both Days Present" rule client-side; backend should also enforce it server-side) */
     async function approveShiftRequest(requestId) {
-        await mockDelay(400);
         const req = mockDB.shiftRequests.find(r => r.requestId === requestId);
-        if (req) {
-            req.approvalStatus = 'Approved';
-            req.approvedBy = 'HR Admin';
-            // Reflect the shift change on future attendance records
-            const records = mockDB.attendanceByEmp[req.employeePrimeId] || [];
-            records.forEach(r => { if (r.attendanceDate >= todayISO()) r.shift = req.requestedShift; });
+        if (!req) return { success: false };
+
+        const rule = checkBothDaysPresentRule(req);
+        if (!rule.eligible) {
+            throw new Error(
+                `"Both Days Present" rule not met — ${formatDate(rule.oldShiftLastDay)} (old shift last day): ${rule.oldDayStatus}, ` +
+                `${formatDate(rule.newShiftFirstDay)} (new shift first day): ${rule.newDayStatus}. Both must be Present/Late/Half_Day.`
+            );
         }
+
+        try {
+            const res = await apiRequest(API_ENDPOINTS.SHIFT_REQUEST_APPROVE(requestId), { method: 'POST' });
+            if (res && res.ok) return await res.json();
+        } catch (err) {
+            console.warn('[Shift Requests] Approve via backend failed, applying locally:', err.message);
+        }
+
+        await mockDelay(400);
+        req.approvalStatus = 'Approved';
+        req.approvedBy = 'HR Admin';
+        // Reflect the shift change on future attendance records
+        const records = mockDB.attendanceByEmp[req.employeePrimeId] || [];
+        records.forEach(r => { if (r.attendanceDate >= todayISO()) r.shift = req.requestedShift; });
         return { success: true };
     }
 
-    /** MOCKED — reject a shift request */
+
+    /** Backend-integrated — reject a shift request, falls back to mock */
     async function rejectShiftRequest(requestId) {
+        try {
+            const res = await apiRequest(API_ENDPOINTS.SHIFT_REQUEST_REJECT(requestId), { method: 'POST' });
+            if (res && res.ok) return await res.json();
+        } catch (err) {
+            console.warn('[Shift Requests] Reject via backend failed, applying locally:', err.message);
+        }
         await mockDelay(400);
         const req = mockDB.shiftRequests.find(r => r.requestId === requestId);
         if (req) {
@@ -2303,6 +2374,12 @@
             const isPending = status.toLowerCase() === 'pending';
             const busy      = state.shiftRequestActionInProgress === req.requestId;
 
+            const rule = checkBothDaysPresentRule(req);
+            const ruleTitle = `Old shift last day (${formatDate(rule.oldShiftLastDay)}): ${rule.oldDayStatus} - New shift first day (${formatDate(rule.newShiftFirstDay)}): ${rule.newDayStatus}`;
+            const ruleBadge = rule.eligible
+                ? `<span class="tag-ot-eligible" style="font-size:10px; padding:2px 6px; border-radius:4px;" title="${escapeHtml(ruleTitle)}"><i class="fas fa-check-circle"></i> Both Days Present</span>`
+                : `<span class="badge-ot-eligible-no" style="font-size:10px; padding:2px 6px; border-radius:4px;" title="${escapeHtml(ruleTitle)}"><i class="fas fa-exclamation-circle"></i> Rule Not Met</span>`;
+
             return `
             <tr data-request-id="${req.requestId}">
                 <td>
@@ -2312,12 +2389,12 @@
                 <td>${shiftBadge(req.currentShift)}</td>
                 <td>${shiftBadge(req.requestedShift)}</td>
                 <td style="max-width:220px; color:#555; font-size:12px;">${escapeHtml(req.reason || '—')}</td>
-                <td>${formatDate(req.requestedDate)}</td>
+                <td>${formatDate(req.requestedDate)}${isPending ? `<div style="margin-top:4px;">${ruleBadge}</div>` : ''}</td>
                 <td>${approvalStatusBadge(status)}</td>
                 <td>${escapeHtml(req.approvedBy || '—')}</td>
                 <td style="white-space:nowrap;">
                     ${isPending ? `
-                        <button class="btn-action-approve" ${busy ? 'disabled' : ''} onclick="handleShiftRequestAction(${req.requestId}, 'approve')">
+                        <button class="btn-action-approve" ${(busy || !rule.eligible) ? 'disabled' : ''} title="${!rule.eligible ? 'Both Days Present rule not met' : ''}" onclick="handleShiftRequestAction(${req.requestId}, 'approve')">
                             ${busy ? 'Working…' : 'Approve'}
                         </button>
                         <button class="btn-action-reject" ${busy ? 'disabled' : ''} onclick="handleShiftRequestAction(${req.requestId}, 'reject')">

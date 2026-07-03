@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Department Management</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        #header-container {
+            position: fixed; top: 0; left: 256px; right: 0;
+            height: 56px; background: #ffffff;
+            border-bottom: 1px solid #3098b5; z-index: 40;
+        }
+        * { font-family: 'Inter', sans-serif; }
+        :root {
+            --primary: #1B738C;
+            --primary-light: #62C9EA;
+            --primary-soft: #BDE4EE;
+            --primary-bg-light: #e9f2f4;
+            --button-hover: #166278;
+            --text-light: #5a7c8a;
+            --page-bg: #f4edee;
+            --border-color: #1B738C;
+        }
+        .section-card {
+            background: white; border-radius: 12px;
+            border: 1px solid #3098b5; padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(27, 115, 140, 0.04);
+        }
+        .btn-primary {
+            background-color: var(--primary); transition: all 0.3s ease;
+            color: white; padding: 8px 16px; border-radius: 8px;
+            cursor: pointer; font-weight: 500; border: none;
+        }
+        .btn-primary:hover { background-color: var(--button-hover); transform: translateY(-1px); }
+        .btn-outline {
+            border: 1px solid var(--primary); color: var(--primary); background: white;
+            padding: 7px 14px; border-radius: 8px; transition: all 0.2s ease; cursor: pointer; font-weight: 500;
+        }
+        .btn-outline:hover { background: #EBF4F6; }
+        .btn-danger {
+            color: red; padding: 5px 12px; border-radius: 8px; cursor: pointer;
+            font-weight: 500; border: 1.5px solid #f3caca; font-size: 12px; background: #fff5f5;
+        }
+        .btn-danger:hover { background: #941010; color: white; border-color: #941010; }
+
+        table.dept-table { width: 100%; border-collapse: collapse; }
+        table.dept-table th {
+            text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
+            color: #1B738C; padding: 10px 12px; border-bottom: 2px solid #BDE4EE; background: #F4FBFD;
+        }
+        table.dept-table td { padding: 10px 12px; border-bottom: 1px solid #EAF3F5; font-size: 13.5px; color: #234; vertical-align: top; }
+        table.dept-table tr:hover td { background: #F8FCFD; }
+        .status-pill { font-size: 11px; padding: 2px 10px; border-radius: 999px; font-weight: 600; }
+        .status-active   { background: rgba(30,142,92,0.12); color: #1e8e5c; }
+        .status-inactive { background: rgba(148,16,16,0.10); color: #941010; }
+        .sub-chip {
+            display: inline-block; font-size: 11px; background: #EBF4F6; color: #1B738C;
+            border: 1px solid #BDE4EE; padding: 2px 8px; border-radius: 6px; margin: 2px 4px 2px 0;
+        }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(20,40,50,0.45);
+            z-index: 1000; align-items: center; justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-box {
+            background: white; border-radius: 14px; width: 460px; max-width: 92vw;
+            max-height: 88vh; overflow-y: auto; padding: 22px 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+        }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display:block; font-size: 12px; font-weight: 600; color:#1B738C; margin-bottom: 5px; }
+        .form-group input[type="text"], .form-group select {
+            width: 100%; padding: 8px 10px; border: 1px solid #BDE4EE; border-radius: 8px; font-size: 13.5px; box-sizing: border-box;
+        }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: #1B738C; }
+        .error-message { color: #c0392b; font-size: 11px; margin-top: 4px; display: none; }
+        .toast {
+            position: fixed; bottom: 22px; right: 22px; z-index: 1200;
+            background: #1B738C; color: white; padding: 10px 18px; border-radius: 8px;
+            font-size: 13px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); opacity: 0; transform: translateY(10px);
+            transition: all .25s ease;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .toast.error { background: #941010; }
+        .toast.info { background: #0e6fa8; }
+        .empty-state { text-align:center; padding: 40px 10px; color: #789; }
+        .loading-spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2.5px solid rgba(255,255,255,.35); border-radius: 50%;
+            border-top-color: white; animation: spin 0.9s linear infinite; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+
+<body class="bg-[#EBF4F6]">
+    <div class="flex h-screen overflow-hidden">
+        <div id="sidebar-container"></div>
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <div id="header-container"></div>
+            <main class="flex-1 overflow-y-auto p-5 main-content" style="margin-top:56px;">
+
+                <div class="flex items-center justify-between mb-5 flex-wrap gap-3">
+                    <div>
+                        <h1 class="text-xl font-bold" style="color:#1B738C;">Department Management</h1>
+                        <p class="text-xs mt-0.5" style="color:#1B738C;">Add, edit, and organize departments and sub-departments.</p>
+                    </div>
+                    <button class="btn-primary" onclick="openDeptModal()">
+                        <i class="fas fa-plus mr-1"></i> Add Department
+                    </button>
+                </div>
+
+                <div class="section-card">
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div class="relative" style="max-width:320px; width:100%;">
+                            <i class="fas fa-search absolute" style="left:12px; top:11px; color:#7fa8b3; font-size:12px;"></i>
+                            <input type="text" id="deptSearch" placeholder="Search department or code…"
+                                style="width:100%; padding:8px 10px 8px 30px; border:1px solid #BDE4EE; border-radius:8px; font-size:13px; box-sizing:border-box;"
+                                oninput="renderDeptTable()">
+                        </div>
+                        <div class="text-xs flex items-center gap-2" style="color:#1B738C;">
+                            <span id="deptCountLabel">0 departments</span>
+                            <span id="deptLoadingIndicator" class="hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card" style="padding:0; overflow:hidden;">
+                    <div class="overflow-x-auto">
+                        <table class="dept-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:22%;">Department</th>
+                                    <th style="width:12%;">Code</th>
+                                    <th style="width:34%;">Sub-Departments</th>
+                                    <th style="width:10%;">Status</th>
+                                    <th style="width:22%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="deptTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Add / Edit Department Modal -->
+    <div class="modal-overlay" id="deptModal">
+        <div class="modal-box">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold" id="deptModalTitle" style="color:#1B738C;">Add Department</h3>
+                <button type="button" onclick="closeDeptModal()" style="color:#789; background:none; border:none; font-size:16px; cursor:pointer;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <input type="hidden" id="deptEditId">
+
+            <div class="form-group">
+                <label>Department Name <span style="color:#c0392b;">*</span></label>
+                <input type="text" id="deptName" placeholder="e.g. Information Technology">
+                <div class="error-message" id="deptName_error"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Department Code <span style="color:#c0392b;">*</span></label>
+                <input type="text" id="deptCode" placeholder="e.g. IT" maxlength="10" style="text-transform:uppercase;">
+                <div class="error-message" id="deptCode_error"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Status</label>
+                <select id="deptStatus">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Sub-Departments</label>
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="subDeptInput" placeholder="e.g. QA — press Add or Enter" style="flex:1;">
+                    <button type="button" class="btn-outline" onclick="addSubDeptChip()">Add</button>
+                </div>
+                <div id="subDeptChips" style="margin-top:8px;"></div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-5">
+                <button type="button" class="btn-outline" onclick="closeDeptModal()">Cancel</button>
+                <button type="button" class="btn-primary" id="deptSaveBtn" onclick="saveDepartment()">
+                    <span id="deptSaveBtnText">Save Department</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirm Modal -->
+    <div class="modal-overlay" id="deleteDeptModal">
+        <div class="modal-box" style="width:380px;">
+            <h3 class="text-base font-bold mb-2" style="color:#941010;"><i class="fas fa-triangle-exclamation mr-1"></i> Delete Department?</h3>
+            <p class="text-sm mb-4" style="color:#456;">This will remove <strong id="deleteDeptName"></strong> and its sub-departments. This cannot be undone.</p>
+            <div class="flex justify-end gap-2">
+                <button type="button" class="btn-outline" onclick="closeDeleteModal()">Cancel</button>
+                <button type="button" class="btn-primary" style="background:#941010;" onclick="confirmDeleteDepartment()">
+                    <span id="deptDeleteBtnText">Delete</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="deptToast"></div>
+
+    <!-- Common JS Files -->
+    <script src="/assets/js/component-loader.js"></script>
+    <script src="/assets/js/common.js"></script>
+    <script src="/assets/js/sidebar.js"></script>
+    <script src="/assets/js/header.js"></script>
+
+    <script>
+        // ==============================
+        // Department Management — Basic CRUD
+        // Rebuilt to follow the same working pattern used on the
+        // Company Management page (see company.html):
+        //   - real fetch() calls against API_BASE_URL + '/api/...'
+        //   - a local cache in localStorage so the page still works
+        //     (and edits persist across reloads) when the backend
+        //     is unreachable
+        //   - same escapeHtml / showToast / modal conventions
+        //
+        // Previously this page called a global apiRequest(...) helper
+        // that is never defined anywhere in the app, so every
+        // save/update/delete silently failed (console error, no
+        // network call, no local update) and the table only ever
+        // showed the hard-coded seed data. That is what "kuch bhi
+        // thik se nahi chal raha" was — fixed below.
+        // ==============================
+
+        const DEPT_API_URL = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '') + '/api/departments';
+        const DEPT_STORAGE_KEY = 'hrms_departments_data';
+
+        // Seed data — used the very first time, before anything is cached/saved
+        const SEED_DEPARTMENTS = [
+            { id: 1, name: 'Information Technology', code: 'IT',  status: 'Active', subDepartments: ['Software Development', 'QA', 'DevOps', 'IT Support'] },
+            { id: 2, name: 'Human Resources',         code: 'HR',  status: 'Active', subDepartments: ['Talent Acquisition', 'Payroll & Compliance'] },
+            { id: 3, name: 'Finance & Accounts',      code: 'FIN', status: 'Active', subDepartments: ['Accounts Payable', 'Accounts Receivable', 'Statutory Compliance'] },
+            { id: 4, name: 'Sales & Marketing',       code: 'SLM', status: 'Active', subDepartments: ['Field Sales', 'Digital Marketing'] },
+            { id: 5, name: 'Operations',              code: 'OPS', status: 'Inactive', subDepartments: [] },
+        ];
+
+        let MOCK_DEPARTMENTS = [];
+        let nextDeptId = 1;
+        let pendingSubDepts = [];
+        let deptPendingDeleteId = null;
+
+        // ── Local cache helpers (mirrors getStoredCompany / saveCompanyToStorage) ──
+        function getStoredDepartments() {
+            try {
+                const raw = localStorage.getItem(DEPT_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function saveDepartmentsToStorage(list) {
+            try {
+                localStorage.setItem(DEPT_STORAGE_KEY, JSON.stringify(list));
+            } catch (e) {
+                console.error('[Departments] Failed to save local cache:', e);
+            }
+        }
+
+        function computeNextId(list) {
+            return list.reduce((max, d) => Math.max(max, Number(d.id) || 0), 0) + 1;
+        }
+
+        // ── Fetch from backend, falling back to local cache / seed data ──
+        async function fetchDepartments(forceReload = false) {
+            const indicator = document.getElementById('deptLoadingIndicator');
+            if (indicator) indicator.classList.remove('hidden');
+
+            if (!forceReload && MOCK_DEPARTMENTS.length) {
+                if (indicator) indicator.classList.add('hidden');
+                return MOCK_DEPARTMENTS;
+            }
+
+            try {
+                const res = await fetch(DEPT_API_URL);
+                if (res.ok) {
+                    const result = await res.json();
+                    const data = Array.isArray(result) ? result : (result.data || []);
+                    if (Array.isArray(data) && data.length) {
+                        MOCK_DEPARTMENTS = data;
+                        nextDeptId = computeNextId(MOCK_DEPARTMENTS);
+                        saveDepartmentsToStorage(MOCK_DEPARTMENTS);
+                        if (indicator) indicator.classList.add('hidden');
+                        return MOCK_DEPARTMENTS;
+                    }
+                }
+                throw new Error('No data from backend');
+            } catch (err) {
+                console.warn('[Departments] Backend not reachable, using cached/local data:', err.message);
+                const cached = getStoredDepartments();
+                MOCK_DEPARTMENTS = cached && cached.length ? cached : JSON.parse(JSON.stringify(SEED_DEPARTMENTS));
+                nextDeptId = computeNextId(MOCK_DEPARTMENTS);
+                if (indicator) indicator.classList.add('hidden');
+                return MOCK_DEPARTMENTS;
+            }
+        }
+
+        // ── UI helpers ──
+        function showDeptToast(msg, type = 'success') {
+            const t = document.getElementById('deptToast');
+            t.textContent = msg;
+            t.className = 'toast show' + (type === 'error' ? ' error' : (type === 'info' ? ' info' : ''));
+            setTimeout(() => t.classList.remove('show'), 2500);
+        }
+
+        function escapeHtmlDept(str) {
+            if (str == null) return '';
+            return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+
+        function openModalDept(id) { document.getElementById(id).classList.add('active'); }
+        function closeModalDept(id) { document.getElementById(id).classList.remove('active'); }
+
+        // ── Render table ──
+        async function renderDeptTable() {
+            const tbody = document.getElementById('deptTableBody');
+            const query = (document.getElementById('deptSearch').value || '').toLowerCase().trim();
+            const all = await fetchDepartments();
+            const rows = all.filter(d =>
+                !query || d.name.toLowerCase().includes(query) || (d.code || '').toLowerCase().includes(query)
+            );
+
+            document.getElementById('deptCountLabel').textContent = `${all.length} department${all.length === 1 ? '' : 's'}`;
+
+            if (!rows.length) {
+                tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="fas fa-building fa-2x mb-2"></i><p>No departments found.</p></div></td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = rows.map(d => `
+                <tr>
+                    <td style="font-weight:600; color:#1B738C;">${escapeHtmlDept(d.name)}</td>
+                    <td>${escapeHtmlDept(d.code)}</td>
+                    <td>${(d.subDepartments || []).length
+                        ? d.subDepartments.map(s => `<span class="sub-chip">${escapeHtmlDept(s)}</span>`).join('')
+                        : '<span style="color:#9ab;">—</span>'}</td>
+                    <td><span class="status-pill ${d.status === 'Active' ? 'status-active' : 'status-inactive'}">${escapeHtmlDept(d.status)}</span></td>
+                    <td style="white-space:nowrap;">
+                        <button class="btn-outline" style="padding:5px 10px; font-size:12px;" onclick="openDeptModal(${d.id})">
+                            <i class="fas fa-pen"></i> Edit
+                        </button>
+                        <button class="btn-danger" style="margin-left:6px;" onclick="openDeleteModal(${d.id})">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // ── Sub-department chip management ──
+        function addSubDeptChip() {
+            const input = document.getElementById('subDeptInput');
+            const val = input.value.trim();
+            if (!val) return;
+            if (pendingSubDepts.some(s => s.toLowerCase() === val.toLowerCase())) {
+                showDeptToast('Sub-department already added.', 'error');
+                return;
+            }
+            pendingSubDepts.push(val);
+            input.value = '';
+            renderSubDeptChips();
+            input.focus();
+        }
+
+        function removeSubDeptChip(idx) {
+            pendingSubDepts.splice(idx, 1);
+            renderSubDeptChips();
+        }
+
+        function renderSubDeptChips() {
+            const box = document.getElementById('subDeptChips');
+            box.innerHTML = pendingSubDepts.map((s, i) => `
+                <span class="sub-chip">${escapeHtmlDept(s)}
+                    <i class="fas fa-times" style="margin-left:5px; cursor:pointer;" onclick="removeSubDeptChip(${i})"></i>
+                </span>
+            `).join('') || '<span style="font-size:11px; color:#9ab;">No sub-departments added yet.</span>';
+        }
+
+        // ── Add / Edit modal ──
+        async function openDeptModal(id) {
+            openModalDept('deptModal');
+            document.getElementById('subDeptInput').value = '';
+            clearDeptErrors();
+
+            if (id) {
+                const all = await fetchDepartments();
+                const dept = all.find(d => String(d.id) === String(id));
+                if (!dept) return;
+                document.getElementById('deptModalTitle').textContent = 'Edit Department';
+                document.getElementById('deptEditId').value = dept.id;
+                document.getElementById('deptName').value = dept.name;
+                document.getElementById('deptCode').value = dept.code;
+                document.getElementById('deptStatus').value = dept.status;
+                pendingSubDepts = [...(dept.subDepartments || [])];
+            } else {
+                document.getElementById('deptModalTitle').textContent = 'Add Department';
+                document.getElementById('deptEditId').value = '';
+                document.getElementById('deptName').value = '';
+                document.getElementById('deptCode').value = '';
+                document.getElementById('deptStatus').value = 'Active';
+                pendingSubDepts = [];
+            }
+            renderSubDeptChips();
+        }
+
+        function closeDeptModal() {
+            closeModalDept('deptModal');
+        }
+
+        function clearDeptErrors() {
+            ['deptName', 'deptCode'].forEach(id => {
+                const err = document.getElementById(`${id}_error`);
+                if (err) { err.style.display = 'none'; err.textContent = ''; }
+                const el = document.getElementById(id);
+                if (el) el.style.borderColor = '';
+            });
+        }
+
+        function showDeptFieldError(id, message) {
+            const err = document.getElementById(`${id}_error`);
+            if (err) { err.textContent = message; err.style.display = 'block'; }
+            const el = document.getElementById(id);
+            if (el) el.style.borderColor = '#dc3545';
+        }
+
+        // ── Save (create or update) — real fetch(), with local fallback ──
+        async function saveDepartment() {
+            clearDeptErrors();
+
+            const id     = document.getElementById('deptEditId').value;
+            const name   = document.getElementById('deptName').value.trim();
+            const code   = document.getElementById('deptCode').value.trim().toUpperCase();
+            const status = document.getElementById('deptStatus').value;
+
+            let hasError = false;
+            if (!name) { showDeptFieldError('deptName', 'Department name is required'); hasError = true; }
+            if (!code) { showDeptFieldError('deptCode', 'Department code is required'); hasError = true; }
+            if (hasError) return;
+
+            await fetchDepartments();
+            const duplicate = MOCK_DEPARTMENTS.find(d =>
+                (d.code.toUpperCase() === code || d.name.toLowerCase() === name.toLowerCase()) &&
+                String(d.id) !== String(id)
+            );
+            if (duplicate) {
+                showDeptFieldError('deptCode', 'A department with this name or code already exists.');
+                return;
+            }
+
+            const payload = { name, code, status, subDepartments: [...pendingSubDepts] };
+
+            const saveBtn = document.getElementById('deptSaveBtn');
+            const saveBtnText = document.getElementById('deptSaveBtnText');
+            saveBtn.disabled = true;
+            const origText = saveBtnText.textContent;
+            saveBtnText.innerHTML = '<span class="loading-spinner"></span> Saving…';
+
+            let backendOk = false;
+            try {
+                const res = await fetch(id ? `${DEPT_API_URL}/${id}` : DEPT_API_URL, {
+                    method: id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                backendOk = !!(res && res.ok);
+                if (!backendOk) throw new Error(`API error ${res ? res.status : ''}`);
+            } catch (err) {
+                console.warn('[Departments] Backend save failed, applying locally only:', err.message);
+            }
+
+            if (id) {
+                const dept = MOCK_DEPARTMENTS.find(d => String(d.id) === String(id));
+                if (dept) {
+                    dept.name = name; dept.code = code; dept.status = status;
+                    dept.subDepartments = payload.subDepartments;
+                }
+            } else {
+                MOCK_DEPARTMENTS.push({ id: nextDeptId++, ...payload });
+            }
+            saveDepartmentsToStorage(MOCK_DEPARTMENTS);
+
+            saveBtn.disabled = false;
+            saveBtnText.textContent = origText;
+
+            showDeptToast(
+                id ? 'Department updated successfully.' : 'Department added successfully.',
+                backendOk ? 'success' : 'info'
+            );
+            if (!backendOk) {
+                showDeptToast('Saved locally — backend unreachable, changes may not sync.', 'error');
+            }
+
+            closeDeptModal();
+            renderDeptTable();
+        }
+
+        // ── Delete ──
+        async function openDeleteModal(id) {
+            await fetchDepartments();
+            const dept = MOCK_DEPARTMENTS.find(d => String(d.id) === String(id));
+            if (!dept) return;
+            deptPendingDeleteId = id;
+            document.getElementById('deleteDeptName').textContent = dept.name;
+            openModalDept('deleteDeptModal');
+        }
+
+        function closeDeleteModal() {
+            closeModalDept('deleteDeptModal');
+            deptPendingDeleteId = null;
+        }
+
+        async function confirmDeleteDepartment() {
+            if (!deptPendingDeleteId) return;
+            const btnText = document.getElementById('deptDeleteBtnText');
+            const origText = btnText.textContent;
+            btnText.innerHTML = '<span class="loading-spinner"></span> Deleting…';
+
+            let backendOk = false;
+            try {
+                const res = await fetch(`${DEPT_API_URL}/${deptPendingDeleteId}`, { method: 'DELETE' });
+                backendOk = !!(res && res.ok);
+                if (!backendOk) throw new Error(`API error ${res ? res.status : ''}`);
+            } catch (err) {
+                console.warn('[Departments] Backend delete failed, applying locally only:', err.message);
+            }
+
+            MOCK_DEPARTMENTS = MOCK_DEPARTMENTS.filter(d => String(d.id) !== String(deptPendingDeleteId));
+            saveDepartmentsToStorage(MOCK_DEPARTMENTS);
+
+            btnText.textContent = origText;
+            showDeptToast('Department deleted.', backendOk ? 'success' : 'info');
+            closeDeleteModal();
+            renderDeptTable();
+        }
+
+        // Allow pressing Enter inside the sub-department input to add a chip
+        document.addEventListener('DOMContentLoaded', () => {
+            const subInput = document.getElementById('subDeptInput');
+            if (subInput) {
+                subInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addSubDeptChip();
+                    }
+                });
+            }
+            if (typeof loadSidebar === 'function') loadSidebar();
+            if (typeof loadHeader === 'function') loadHeader();
+            renderDeptTable();
+        });
+    </script>
+</body>
+</html>
